@@ -1,10 +1,26 @@
 # Koine Drill — maintenance notes
 
-Self-contained HTML flashcard app. Project notes report 26 decks: 22 paradigms (295 slots) + 403 vocabulary words, covering Biblingo lessons 1–16.
+Two-file flashcard app: `koine-drill.html` (markup/CSS/engine) + `cards-data.js`
+(deck/vocab/paradigm content, loaded via `<script src="cards-data.js">` right
+before the engine script — see "Data file split" below). 26 decks: 22 paradigms
+(439 slots) + 403 vocabulary words, covering Biblingo lessons 1–16.
 
 ## Hosting and sync: verify against the code
 
 Hosting is being moved from the claude.ai Artifact to GitHub + Cloudflare (2026-09-12). The supplied notes say sync was rewritten to a general mechanism, but the HTML inspected during hosting setup still used `window.claude.use("db")`, with browser-local storage as its fallback. Treat the sync rewrite as **unverified** until the current repository code proves otherwise. Read the actual code before touching sync behavior; these notes do not yet document a general sync implementation.
+
+## Data file split (2026-09-16)
+
+The old single-file version kept a "DECK DATA" block (CASES/NUMS/GENS/PERSONS/
+GROUPS/ARG_POOL, the `r()`/`n()`/`v()`/`dim*()` row-builder helpers, DECKS, VOCAB,
+VOCAB2, WORDS, CLAUSES, NOUNSETS, NOUN_PARADIGMS, VERBSETS, VERB_DECKS, MI_VERBS,
+VMP_VERBS) inside the engine's `(function(){"use strict";...})()` IIFE. That block
+now lives verbatim in `cards-data.js` as top-level (global) `var` statements in
+its own `<script src>` tag, loaded before the engine `<script>` so the IIFE still
+resolves them as free variables. Not converted to literal JSON: DECKS builds 394
+rows via function calls, not object literals, and the data carries ~190 lines of
+`//` documentation comments — both incompatible with JSON. Don't reorder the two
+script tags; the engine depends on the data script running first.
 
 ## Data structures
 
@@ -26,7 +42,7 @@ The paradigm structure above is schematic, not executable JavaScript.
 
 `shortOf(value, deck)` resolves the deck's own short map first, then the global `SHORT` abbreviations — must be passed the deck, since "masculine"/"feminine" mean different things in n1 vs n2.
 
-`CLAUSES` holds example sentences keyed `<deckId>|<dim>|<dim>|...`. `NOUNSETS` holds per-paradigm word lists for n1/n2/n3 (up to 3 words each, `{g, f:[8 forms], ex:[8 sentences], exEn:[8 glosses]}`, one slot per case×number). `NOUN_PARADIGMS` drives the dropdown labels. `VERBSETS`/`VERB_DECKS` are the verb-side counterpart for the six rotating verb decks only (μι Verbs is excluded — its 3 verbs never rotate).
+`CLAUSES` holds example sentences keyed `<deckId>|<dim>|<dim>|...`. `NOUNSETS` holds per-paradigm word lists for n1/n2/n3 (up to 3 words each, `{g, f:[8 forms], ex:[8 sentences], exEn:[8 glosses]}`, one slot per case×number). `NOUN_PARADIGMS` drives the dropdown labels. `VERBSETS`/`VERB_DECKS` are the verb-side counterpart for the five rotating verb decks only — μι Verbs (vmi, 11 verbs, `MI_VERBS` roster) and Present Medio-Passive (vmp, 17 verbs, `VMP_VERBS` roster) are both permanently excluded and shown side-by-side instead of rotating; each has its own Settings-panel and Reference-panel "show verb" dropdown driven by its roster array.
 
 Adding a word to `NOUNSETS`: cap at 3 words per paradigm, all already taught (check lesson PDFs + `WORDS`/`VOCAB`). Write all 8 sentences (one per case×number slot) using the accent rules below.
 
@@ -61,16 +77,21 @@ Form→Parse prompts show no Greek lemma, no English gloss (case-marked glosses 
 
 ## Validation
 
-Extract the data block by marker, not line number. This example uses Bash:
+The data no longer needs extracting from the HTML — `cards-data.js` already is that
+file. Validate it directly in Node, e.g.:
 
 ```bash
-A=$(grep -n '^  var CASES' koine-drill.html | cut -d: -f1)
-B=$(( $(grep -n '// ENGINE' koine-drill.html | cut -d: -f1) - 2 ))
-sed -n "${A},${B}p" koine-drill.html > data.js
-echo 'module.exports={DECKS,VOCAB,VOCAB2,WORDS,CLAUSES,NOUNSETS,NOUN_PARADIGMS};' >> data.js
+node -e "
+require('./cards-data.js');
+// or: eval(require('fs').readFileSync('cards-data.js','utf8'));
+"
 ```
 
-Check in Node: row count = product of dim value counts, no duplicate slot keys, every dim value legal, form/gloss non-empty, no row where form equals one of its own dim values. For `NOUNSETS`: 3 words/paradigm, entry 0 = deck default, every array length 8, no duplicates, keys match `NOUN_PARADIGMS` 1:1. Pair with an accent-consistency check (Unicode NFD, strip accents, confirm the declined form's letters appear in its own sentence) whenever a form or sentence changes.
+(`cards-data.js` declares plain top-level `var`s, so `require`ing it as CommonJS
+attaches nothing to `module.exports` — either wrap it in an IIFE that returns the
+names you need, or `eval` its source in a scope where you then read the globals.)
+
+Check: row count = product of dim value counts, no duplicate slot keys, every dim value legal, form/gloss non-empty, no row where form equals one of its own dim values. For `NOUNSETS`: 3 words/paradigm, entry 0 = deck default, every array length 8, no duplicates, keys match `NOUN_PARADIGMS` 1:1. For `vmi`: 66 rows (11×6), `MI_VERBS` matches the deck's `pd` values 1:1. For `vmp`: 102 rows (17×6), `VMP_VERBS` matches 1:1. Pair with an accent-consistency check (Unicode NFD, strip accents, confirm the declined form's letters appear in its own sentence) whenever a form or sentence changes.
 
 Render check: headless browser, assert no page errors, drive the UI and check actual behavior — a passing DOM assertion isn't proof a `st.filters`-backed control actually changed `st.queue`.
 
@@ -78,5 +99,5 @@ Render check: headless browser, assert no page errors, drive the UI and check ac
 
 1. Anki export of vocab decks — offered, not taken up.
 2. Chapters beyond 16, as taught — add deck data, standard process.
-3. Context clauses for verb decks (beyond the six rotating decks' own sentences) and μι Verbs. Vocab isn't lesson-gated (all 403 words already taught); author as static data, no live generation; don't leak the answer via word order.
+3. Context clauses for verb decks (beyond the five rotating decks' own sentences), 8 of the 11 μι Verbs, and 14 of the 17 Medio-Passive verbs (only each deck's original word(s) have sentences). Vocab isn't lesson-gated (all 403 words already taught); author as static data, no live generation; don't leak the answer via word order.
 4. A second Prev/Next pair under the card, mobile-only — raised then dropped, revisit only if it comes back up.
