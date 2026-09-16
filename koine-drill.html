@@ -3,7 +3,7 @@
 
 
 <title>Koine Drill</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=Cardo:ital,wght@0,400;0,700;1,400&family=Gentium+Book+Plus:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=Noto+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=GFS+Neohellenic:ital,wght@0,400;0,700;1,400&family=Cardo:ital,wght@0,400;0,700;1,400&family=Gentium+Book+Plus:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=Noto+Sans:ital,wght@0,400;0,600;1,400&display=swap">
 <style>
   :root{
     --ground:#EDEFEA; --surface:#FFFFFF; --surface-2:#F5F7F2;
@@ -26,6 +26,7 @@
   :root[data-ts="xl"]{--ts:1.3}
   :root[data-grk="cardo"]{--grk:"Cardo","Gentium Book Plus",Georgia,serif}
   :root[data-grk="didot"]{--grk:"GFS Didot","Gentium Book Plus",Georgia,serif}
+  :root[data-grk="neohellenic"]{--grk:"GFS Neohellenic","Gentium Book Plus",Georgia,serif}
   :root[data-grk="noto"]{--grk:"Noto Sans","Gentium Book Plus",Georgia,serif}
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -436,6 +437,7 @@
         <button id="fontGentium" aria-pressed="true">Gentium</button>
         <button id="fontCardo" aria-pressed="false">Cardo</button>
         <button id="fontDidot" aria-pressed="false">Didot</button>
+        <button id="fontNeohellenic" aria-pressed="false">Neohellenic</button>
         <button id="fontNoto" aria-pressed="false">Noto Sans</button>
       </div>
     </div>
@@ -1978,7 +1980,7 @@
   });
   applySize();
 
-  var FONTS=[["fontGentium","gentium"],["fontCardo","cardo"],["fontDidot","didot"],["fontNoto","noto"]];
+  var FONTS=[["fontGentium","gentium"],["fontCardo","cardo"],["fontDidot","didot"],["fontNeohellenic","neohellenic"],["fontNoto","noto"]];
   function applyFont(){
     // "gentium" is the default face declared on :root, so it carries no attribute
     if(st.font==="gentium") document.documentElement.removeAttribute("data-grk");
