@@ -296,6 +296,69 @@ dimension is part of the id), so saved progress on these five decks resets
 with this change — consistent with, and expected given, the vmi/vmp
 precedent already noted above.
 
+## Remaining μι-verb and medio-passive sentences written (2026-09-16, later same day)
+
+Closed out item 3 from "Ideas, not authorized work": the 8 μι-verbs and 14
+medio-passive verbs that had forms but no example sentence (only each deck's
+original handful of Biblingo sample verbs had one) now all do — 66 vmi rows
+and 102 vmp rows, all with `ex`/`exEn`, zero gaps left in either deck.
+
+**Argument pattern per verb, from Biblingo's own vocabulary-table hint, not
+guessed:**
+
+| verb | pattern | vocab hint |
+|---|---|---|
+| ἀποδίδωμι, δείκνυμι, προστίθημι | dative recipient + accusative thing | "...σοι αὐτήν" / "...αὐτὴν αὐτῷ" |
+| ἀφίημι, ἀπόλλυμι | accusative object | "...αὐτήν" |
+| συνίημι | accusative, restricted to word/voice | "συνίημι λόγον" |
+| πίμπλημι | accusative container + genitive content ("fill X with Y") | "...αὐτὴν αὐτοῦ" |
+| ἀπέρχομαι | ἀπό + genitive | "ἀπέρχομαι ἀπ' αὐτῆς" |
+| εἰσέρχομαι, πορεύομαι | εἰς + accusative | "εἰς..." |
+| προσέρχομαι | dative complement | "προσέρχομαί σοι" |
+| διαπορεύομαι | διά + genitive | "διαπορεύομαι διά" |
+| γεύομαι | accusative (Biblingo's own convention here, not the classical genitive) | "γεύομαι τήν" |
+| ἅπτομαι | genitive object | "ἅπτομαι τῆς" |
+| ἀσπάζομαι | accusative person | "ἀσπάζομαί σε" |
+| δέχομαι | accusative person, restricted to a hospitality sense | "δέχομαι αὐτήν" |
+| γίνομαι | anarthrous predicate nominative, agreeing in number with the subject | shows a **nominative** pronoun (αὐτή), not accusative |
+| βούλομαι | accusative, standing in for the infinitive complement | 16.1: "a noun may take the place of the infinitive... you can 'desire to eat bread' or 'desire bread'" |
+| κάθημαι | ἐπί + genitive | "κάθημαι ἐπὶ τόπου" |
+| ὀργίζομαι, στρέφομαι | intransitive, mirroring already-shipped ἔρχομαι/ἐργάζομαι | no argument shown |
+| ἀνίστημι | kept intransitive/locational | see note below |
+
+`ἀνίστημι` is the one deliberate departure from its own vocab hint: the
+lesson pairs it with an accusative (αὐτήν, "stand her up/raise her"), but
+this deck's *own* gloss — set in an earlier session and not something this
+pass changed — is the intransitive "I stand up," not a transitive "I raise."
+Writing a transitive sentence against an intransitive gloss would contradict
+the card the reader is actually drilling, so its sentences instead mirror
+its already-shipped sibling ἵστημι exactly (same `ἐν τῷ ἱερῷ` / `ἐν τῇ ὁδῷ` /
+`πρὸς τὸν κύριον` locative bank, nothing else). If `ἀνίστημι`'s gloss is ever
+changed to the transitive sense, its sentences should be redone to match.
+
+New genitive-singular forms needed for GEN/DIA_GEN/ACC_GEN/EPI_GEN objects
+came from two places: reused directly where `NOUNSETS` already had them
+(ἀνθρώπου, θύρας, βιβλίου [see below], ἐκκλησίας, καρδίας, ζωῆς, δόξης,
+ἀγάπης, στόματος, σπέρματος, ὁδοῦ, γυναικός, μαθητοῦ, προφήτου, τέκνου,
+ἀδελφῆς), and derived by the fully regular declension rule (2nd-declension
+masc/neut genitive singular is always `-ου`, 1st-declension `-η` feminine is
+always `-ης`) for the handful of nouns this app has only ever shown in
+accusative/dative form so far — οἴκου, βιβλίου, ἐπιστολῆς, φωνῆς. That's
+rule-based derivation from an explicitly-taught paradigm (lesson 3.2, "Noun
+– Gen sg m f n"), not a guess at an irregular form, and is the same standard
+already applied to this project's other accusative/dative bank expansions.
+μαθηταί/προφῆται/κύριοι (γίνομαι's plural predicate nominatives) are the
+same kind of regular derivation — μαθηταί itself already appears elsewhere
+in this file, with its article, as a subject.
+
+Every new sentence was checked programmatically: no repeated English words,
+no "to to" or doubled prepositions, no double spaces, and — since the app's
+word-highlight feature matches a card's own `form` against its sentence by
+folding accents and case — every single sentence actually contains its own
+target verb form (132/132 checked, 0 misses). Verified in headless Chromium
+that both decks still report full row/ex coverage (`vmi` 66/66, `vmp`
+102/102) with zero page errors.
+
 ## Stable progress IDs
 
 Forward (Parse→Form): `<deck>|F|<dim values>`. Reverse (Form→Parse): `<deck>|R|<dim values of every row this form covers, joined by ~>` — not the form itself, because rotating decks change forms every session and keying by form would throw away scheduling. Anything touching progress records must build the id this same way.
@@ -404,6 +467,6 @@ needing to click anything.
 
 1. Anki export of vocab decks — offered, not taken up.
 2. Chapters beyond 16, as taught — add deck data, standard process.
-3. Context clauses for 8 of the 11 μι Verbs and 14 of the 17 Medio-Passive verbs (only each deck's original word(s) have sentences) — **still open**. The five former rotating verb decks (vpres/vfut/vaor2/vaor1/vimpf) no longer belong on this list: every row in all five now has its own sentence, done 2026-09-16 alongside the side-by-side conversion above. Vocab isn't lesson-gated (all 403 words already taught); author as static data, no live generation; don't leak the answer via word order.
+3. ~~Context clauses for 8 of the 11 μι Verbs and 14 of the 17 Medio-Passive verbs~~ — done 2026-09-16 (see "Remaining μι-verb and medio-passive sentences written" above). Every verb-deck row in this app now has an example sentence. Vocab sentences remain out of scope unless asked for: vocab isn't lesson-gated (all 403 words already taught), would need static-data authorship with no live generation, and must not leak the answer via word order.
 4. A second Prev/Next pair under the card, mobile-only — raised then dropped, revisit only if it comes back up.
 5. Reconciling the two local clones described above so `~/koine-drill` can actually push — not started.
