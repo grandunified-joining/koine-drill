@@ -113,7 +113,7 @@ The paradigm structure above is schematic, not executable JavaScript.
 
 `shortOf(value, deck)` resolves the deck's own short map first, then the global `SHORT` abbreviations — must be passed the deck, since "masculine"/"feminine" mean different things in n1 vs n2.
 
-`CLAUSES` holds example sentences keyed `<deckId>|<dim>|<dim>|...`. `NOUNSETS` holds per-paradigm word lists for n1/n2/n3 (up to 3 words each, `{g, f:[8 forms], ex:[8 sentences], exEn:[8 glosses]}`, one slot per case×number). `NOUN_PARADIGMS` drives the dropdown labels. `VERBSETS`/`VERB_DECKS` are the verb-side counterpart for the five rotating verb decks only — μι Verbs (vmi) and Present Medio-Passive (vmp) are both permanently excluded and shown side-by-side instead of rotating (see below for both).
+`CLAUSES` holds example sentences keyed `<deckId>|<dim>|<dim>|...`. `NOUNSETS` holds per-paradigm word lists for n1/n2/n3 (up to 3 words each, `{g, f:[8 forms], ex:[8 sentences], exEn:[8 glosses]}`, one slot per case×number). `NOUN_PARADIGMS` drives the dropdown labels. `VERBSETS`/`VERB_DECKS` are **permanently empty** as of 2026-09-16 (see "All five verb-tense decks converted to side-by-side" below) — every verb deck (vpres, vfut, vaor2, vaor1, vimpf, vmi, vmp) is now a side-by-side roster, none rotate. `rollVerbs()` still runs on build but is a harmless no-op against the empty objects; it was left in place rather than removed, matching how vmi/vmp's earlier conversion handled it.
 
 Adding a word to `NOUNSETS`: cap at 3 words per paradigm, all already taught (check lesson PDFs + `WORDS`/`VOCAB`). Write all 8 sentences (one per case×number slot) using the accent rules below.
 
@@ -192,6 +192,109 @@ dropdowns mirror vmi's exactly: a Settings-panel "Medio-Passive verb" dropdown
 gated to `st.deck==="vmp"` (see "Filters and queue behavior" below for why),
 and a Reference-panel "Show verb" display-only filter (module-level state
 `refVmpPd`, not wired to `st.filters`).
+
+## All five verb-tense decks converted to side-by-side and expanded (2026-09-16, later same day)
+
+Through the morning's vmp work, vpres/vfut/vaor2/vaor1/vimpf were still the last
+five **rotating** decks: each a fixed 3-word pool (its original Biblingo sample
+verbs) swapped one at a time via the Settings dropdown, driven by `rollVerbs()`.
+John asked for every verb taught through lesson 16 to be added, and then — via
+an explicit either/or question — asked for all five to show every verb side by
+side at once, exactly like vmi and vmp, rather than keeping the rotating pool
+and just widening it.
+
+**Roster and scope.** Verbs were pulled from `VOCAB`/`VOCAB2` (all non-deponent,
+non-μι active verbs taught through 16.4) and cross-checked against each
+lesson's own table before any form was generated — no form here is guessed
+from general Koine knowledge. Present and imperfect cover the full roster.
+Future and sigmatic aorist deliberately cover **only vowel/diphthong-stem
+verbs** — lesson 10.2 explicitly states that consonant-stem σ-combinations
+(βλέπω→βλέψω, κράζω→κράξω, etc.) are recognition-only at this point in the
+course, so those verbs were left out of vfut/vaor1 rather than guessed.
+Thematic (2nd) aorist covers the verbs with an attested form in Table 99
+(lesson 11.1) or an unambiguous vocabulary-listed aorist stem; nothing was
+back-derived from the present stem alone. Final rosters:
+
+| deck | id | verbs | new rows |
+|---|---|---|---|
+| Present Active | vpres | 62 (was 3) | 372 (62×6) |
+| Imperfect | vimpf | 60 (was 3) | 360 (60×6) |
+| Sigmatic Aorist | vaor1 | 14 (was 3) | 84 (14×6) |
+| Thematic Aorist | vaor2 | 13 (was 3) | 78 (13×6) |
+| Future | vfut | 14 (was 3) | 84 (14×6) |
+
+Each deck's own three original Biblingo sample verbs (and their existing
+example sentences) were kept verbatim, not regenerated.
+
+**Compound-verb accent rule, found and fixed here.** Deriving the imperfect
+and sigmatic aorist of prefixed verbs (ἀποθνῄσκω, ὑπάγω, ἐνδύω, ἀποστέλλω,
+ἀναβαίνω, ἐκβάλλω, ἐπιστρέφω, προσέχω, ἐπιτρέπω, plus εἰσέρχομαι in the
+thematic aorist) exposed a rule the noun/present-tense work never touched:
+in an **augmented** tense the recessive accent cannot move left past the
+augment into the prepositional prefix, even though it legitimately can in a
+non-augmented form (e.g. the imperative πρόσεχε). A first pass that ran the
+general whole-word recessive algorithm over the full compound produced
+πρόσειχον/ὕπηγον — wrong; the augment blocks recession the same way it does
+in simplex verbs. Fixed with a prefix-aware helper that strips the prefix,
+computes the accent on the augmented core alone, and reattaches the prefix
+literally — giving προσεῖχον, ὑπῆγον, etc. Also caught and fixed in the same
+pass: ἐνδύω's sigmatic aorist was double-augmenting to ἐἔνδυσα (prepending ἐ-
+to an already-prefixed stem) instead of ἐνέδυσα. See "Greek language checks"
+above, which already documented the general compound-accent rule from the
+vmi/vmp work — this is the augmented-tense corollary of the same rule.
+
+**Sentences.** Every new row got a fresh, sensible example sentence, not a
+generic one. The shared object-noun pool (accusative, accusative-of-person,
+dative) was expanded by reusing forms already verified elsewhere in this file
+(`NOUNSETS`) — no new declined noun form was invented for this. Per-verb
+object restriction (e.g. ἐσθίω only ever pairs with "the bread," not "the
+house") was hand-curated rather than left to a uniform pool, and two
+English-gloss bugs that produced doubled prepositions ("return to into the
+congregation," "pay attention to to the congregation," "I believe to God")
+were fixed by stripping a redundant leading "to" from dative-only verbs'
+sentence phrasing and removing a baked-in preposition from ἐπιστρέφω's and
+εἰσέρχομαι's own glosses. All 894 generated sentences were scanned
+programmatically for repeated words, "to to," and double spaces — zero
+anomalies.
+
+**A real bug caught before shipping:** λαμβάνω is vimpf's own original
+sample verb *and* was independently in the new-verb roster, so the first
+splice produced a visible duplicate ("take" and "take-2," 6 duplicate rows).
+Caught by a post-splice duplicate-lexeme scan across all five new roster
+constants, not left for John to find; the dedup logic was also added
+upstream in the generator so it can't recur if this is regenerated.
+
+**UI wiring.** `renderRef()` (Reference/Charts panel) and `renderVerbSets()`
+(Settings panel) previously had one hand-written block per side-by-side deck
+(the vmi block, then the vmp block copied under it). Rather than writing five
+more copies, both functions now drive all five new decks off one shared
+config array, `SBS_VERB_DECKS` (`{id, list, label}`, declared next to
+`refMiPd`/`refVmpPd` around `renderRef`), plus a `refSbsPd` object (`{vpres:
+"all", vfut: "all", ...}`) standing in for what would otherwise be five more
+named state variables. Behavior is identical to vmi/vmp: a "Show verb"
+display-only dropdown in Reference (doesn't rebuild the queue, just
+re-renders), and a real filter dropdown in Settings gated to
+`st.deck===<that deck's id>` for the same `passesFilter()` reason vmi/vmp's
+dropdowns are gated (see "Filters and queue behavior" below).
+`st.filters[id].pd` needed no new initialization — `defaultFilters()` already
+seeds every dim (including the new `pd` dimParas) to "all values" for every
+deck in `DECKS`, vmi/vmp/these five included.
+
+**Verified** in headless Chromium (`check_sbs.js`): for each of the five
+decks, clicking its deck button and reading the DOM confirms the Settings
+dropdown has exactly the roster's verb count as options and the Reference
+dropdown's "All N verbs" option matches the same count — zero page errors.
+Spot-checked actual row content afterward (`check_forms.js`): all nine
+compound-verb imperfects and ἐνδύω's sigmatic aorist render the corrected
+forms (ὑπῆγον, προσεῖχον, ἐνέδυσα, etc., not the earlier over-recessed/
+double-augmented ones), and a sample of generated sentences across
+vpres/vaor2 confirmed no leftover doubled-preposition or nonsense pairings.
+
+Progress note: converting these five off `VERBSETS`/`VERB_DECKS` changes
+their card ids the same way the vmi/vmp conversion did (the new `pd`
+dimension is part of the id), so saved progress on these five decks resets
+with this change — consistent with, and expected given, the vmi/vmp
+precedent already noted above.
 
 ## Stable progress IDs
 
@@ -284,14 +387,23 @@ require('./cards-data.js');
 attaches nothing to `module.exports` — either wrap it in an IIFE that returns the
 names you need, or `eval` its source in a scope where you then read the globals.)
 
-Check: row count = product of dim value counts, no duplicate slot keys, every dim value legal, form/gloss non-empty, no row where form equals one of its own dim values. For `NOUNSETS`: 3 words/paradigm, entry 0 = deck default, every array length 8, no duplicates, keys match `NOUN_PARADIGMS` 1:1. For `vmi`: 66 rows (11×6), `MI_VERBS` matches the deck's `pd` values 1:1. For `vmp`: 102 rows (17×6), `VMP_VERBS` matches 1:1. Pair with an accent-consistency check (Unicode NFD, strip accents, confirm the declined form's letters appear in its own sentence) whenever a form or sentence changes.
+Check: row count = product of dim value counts, no duplicate slot keys, every dim value legal, form/gloss non-empty, no row where form equals one of its own dim values. For `NOUNSETS`: 3 words/paradigm, entry 0 = deck default, every array length 8, no duplicates, keys match `NOUN_PARADIGMS` 1:1. For `vmi`: 66 rows (11×6), `MI_VERBS` matches the deck's `pd` values 1:1. For `vmp`: 102 rows (17×6), `VMP_VERBS` matches 1:1. For `vpres`: 372 rows (62×6), `VPRES_VERBS` matches 1:1. For `vimpf`: 360 rows (60×6), `VIMPF_VERBS` matches 1:1. For `vaor1`: 84 rows (14×6), `VAOR1_VERBS` matches 1:1. For `vaor2`: 78 rows (13×6), `VAOR2_VERBS` matches 1:1. For `vfut`: 84 rows (14×6), `VFUT_VERBS` matches 1:1. Also scan every one of the seven `*_VERBS` roster constants for a duplicate `g` (lexeme) — the λαμβάνω/vimpf bug above shipped from exactly that kind of duplication and is the cheapest thing to check first. Pair with an accent-consistency check (Unicode NFD, strip accents, confirm the declined form's letters appear in its own sentence) whenever a form or sentence changes.
 
 Render check: headless browser, assert no page errors, drive the UI and check actual behavior — a passing DOM assertion isn't proof a `st.filters`-backed control actually changed `st.queue`. For a new dropdown, click the relevant deck button first (state only renders once that deck is selected), then read `<select>` option counts/values; for a display-filter dropdown confirm the rendered table count actually changes on `change`. Regression-check every other verb deck still renders after touching `VERB_DECKS`/`VERBSETS`.
+
+Since internal engine state (`st`, `DECKS`, `renderRef`, etc.) lives inside the
+engine script's own IIFE and isn't reachable from `page.evaluate`, drive checks
+through the real DOM instead: find a deck button by its `.dn` text and
+`.click()` it (fires the same `st.deck=id;...;renderRef();...;renderVerbSets()`
+chain a real click would), then read `#settingsPanel select`/`#refHost select`
+option counts. `cards-data.js`'s own top-level `var`s (`DECKS`, `VPRES_VERBS`,
+etc.) **are** global — read those directly for row/roster-level checks without
+needing to click anything.
 
 ## Ideas, not authorized work
 
 1. Anki export of vocab decks — offered, not taken up.
 2. Chapters beyond 16, as taught — add deck data, standard process.
-3. Context clauses for verb decks (beyond the five rotating decks' own sentences), 8 of the 11 μι Verbs, and 14 of the 17 Medio-Passive verbs (only each deck's original word(s) have sentences). Vocab isn't lesson-gated (all 403 words already taught); author as static data, no live generation; don't leak the answer via word order.
+3. Context clauses for 8 of the 11 μι Verbs and 14 of the 17 Medio-Passive verbs (only each deck's original word(s) have sentences) — **still open**. The five former rotating verb decks (vpres/vfut/vaor2/vaor1/vimpf) no longer belong on this list: every row in all five now has its own sentence, done 2026-09-16 alongside the side-by-side conversion above. Vocab isn't lesson-gated (all 403 words already taught); author as static data, no live generation; don't leak the answer via word order.
 4. A second Prev/Next pair under the card, mobile-only — raised then dropped, revisit only if it comes back up.
 5. Reconciling the two local clones described above so `~/koine-drill` can actually push — not started.
