@@ -1,7 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-
-
-
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Koine Drill</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=GFS+Neohellenic:ital,wght@0,400;0,700;1,400&family=Cardo:ital,wght@0,400;0,700;1,400&family=Gentium+Book+Plus:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=Noto+Sans:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,700;1,400&family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Alegreya+Sans:ital,wght@0,400;0,700;1,400&family=Arimo:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
@@ -2425,15 +2422,26 @@
 
   // ======================================================================
   // CROSS-DEVICE SYNC — optional. localStorage (load()/save() above) is
-  // always the source of truth for an instant, offline-safe render; when
-  // the db capability is granted, the same blob save() already writes is
-  // mirrored to one shared document, and a live subscription pulls in
-  // whatever any other device most recently wrote (including a reset).
+  // always the source of truth for an instant, offline-safe render; once a
+  // sync backend is available (either one below), the same blob save()
+  // already writes is mirrored to one shared document, and any other
+  // device's most recent write is pulled in (including a reset).
   // Whole-blob last-writer-wins, same rule the store itself uses — there
   // is exactly one blob, so there is nothing finer-grained to merge.
-  // If db is unavailable (not granted, offline, old runtime) every path
-  // below no-ops and the app behaves exactly as it did before this block
-  // existed.
+  // If no backend is available (not granted, offline, old runtime, no
+  // network) every path below no-ops and the app behaves exactly as it
+  // did before this block existed.
+  //
+  // Two backends share this one block, picked automatically:
+  //   - claude.ai db capability -- when window.claude exists, i.e. this
+  //     page is the published Artifact itself (claude.ai link, in the app
+  //     or a browser).
+  //   - Cloudflare Pages Function + KV -- when it doesn't, i.e. this is
+  //     the identical file pushed to GitHub and auto-deployed to
+  //     koine-drill.pages.dev, which never gets window.claude. See
+  //     cloudflareSync() below and functions/api/progress.js.
+  // blob()/applyBlob()/refreshChrome()/readLocal() are shared by both --
+  // same shape, same merge logic -- so only the transport differs.
   // ======================================================================
   (function initSync(){
     var statusEl=el("syncStatus");
@@ -2449,11 +2457,101 @@
       statusEl.textContent=t;
       statusEl.className="hint"+(kind?" sync-"+kind:"");
     }
+
+    function blob(){
+      return {deck:st.deck,mode:st.mode,answer:st.answer,session:st.session,font:st.font,
+        size:st.size,limit:st.limit,missRequeue:st.missRequeue,
+        hl:st.hl,ambigMode:st.ambigMode,depth:st.depth,
+        nounSet:st.nounSet,verbSet:st.verbSet,
+        archived:st.archived,filters:st.filters,progress:st.progress,
+        updatedAt:Date.now()};
+    }
+    // mirrors load()'s own field-by-field acceptance, so a document from an
+    // older or newer build of this page can never hand st a malformed value
+    function applyBlob(s){
+      if(!s) return;
+      if(s.deck&&(s.deck==="all"||DECK_BY_ID[s.deck])) st.deck=s.deck;
+      if(s.mode) st.mode=s.mode;
+      if(s.answer) st.answer=s.answer;
+      if(s.session) st.session=s.session;
+      if(s.font) st.font=s.font;
+      if(s.size) st.size=s.size;
+      if(s.limit) st.limit=s.limit;
+      if(s.hl) st.hl=s.hl;
+      if(s.ambigMode) st.ambigMode=s.ambigMode;
+      if(typeof s.depth==="number") st.depth=s.depth;
+      if(typeof s.missRequeue==="boolean") st.missRequeue=s.missRequeue;
+      if(s.nounSet&&typeof s.nounSet==="object") st.nounSet=Object.assign({},s.nounSet);
+      if(s.verbSet&&typeof s.verbSet==="object") st.verbSet=Object.assign({},s.verbSet);
+      // Real snapshot data from a live sync backend can come back
+      // non-extensible (the claude.ai db capability freezes what it hands
+      // back, to prevent accidental mutation). st.archived and st.progress
+      // are both used as growable dictionaries -- st.archived[key]=... on
+      // Archive word, st.progress[c.id]=p on every single graded
+      // answer (bump()) -- so adopting the remote object BY REFERENCE
+      // means the very next new key throws "Cannot add property X,
+      // object is not extensible", uncaught, right in the middle of
+      // the click handler (checkForm -> finishCheck -> bump). That
+      // aborts finishCheck before it ever reaches render(), which is
+      // why the tap looked like it did nothing at all: not a click
+      // that failed to register, but a click that registered, graded
+      // partway, then silently threw before painting anything. Copy
+      // into fresh, plain, extensible objects instead of adopting the
+      // frozen ones directly.
+      if(s.archived) st.archived=Object.assign({},s.archived);
+      if(s.progress){
+        var freshProgress={};
+        Object.keys(s.progress).forEach(function(k){ freshProgress[k]=Object.assign({},s.progress[k]); });
+        st.progress=freshProgress;
+      }
+      if(s.filters) DECKS.forEach(function(d){
+        var saved=s.filters[d.id]; if(!saved) return;
+        d.dims.forEach(function(dim){
+          var v=saved[dim.k];
+          if(v&&v.length) st.filters[d.id][dim.k]=v.filter(function(x){return dim.values.indexOf(x)>-1;});
+          if(!st.filters[d.id][dim.k].length) st.filters[d.id][dim.k]=dim.values.slice();
+        });
+      });
+    }
+    // re-stamp every toggle and rebuild, for a blob that arrived after the
+    // page had already rendered once from localStorage or its defaults
+    function refreshChrome(){
+      el("modeParse").setAttribute("aria-pressed",st.mode==="parse"?"true":"false");
+      el("modeForm").setAttribute("aria-pressed",st.mode==="form"?"true":"false");
+      el("ansRecall").setAttribute("aria-pressed",st.answer==="recall"?"true":"false");
+      el("ansReveal").setAttribute("aria-pressed",st.answer==="reveal"?"true":"false");
+      el("sessDue").setAttribute("aria-pressed",st.session==="due"?"true":"false");
+      el("sessAll").setAttribute("aria-pressed",st.session==="all"?"true":"false");
+      el("missSame").setAttribute("aria-pressed",st.missRequeue?"true":"false");
+      el("missNext").setAttribute("aria-pressed",st.missRequeue?"false":"true");
+      el("ambAny").setAttribute("aria-pressed",st.ambigMode==="any"?"true":"false");
+      el("ambAll").setAttribute("aria-pressed",st.ambigMode==="all"?"true":"false");
+      if(typeof applyHL==="function") applyHL();
+      if(typeof applyDepth==="function") applyDepth();
+      renderNounSets();
+      renderVerbSets();
+      applyLimit();applySize();applyFont();
+      // deliberately NOT build() -- this runs whenever a background sync
+      // merge lands, which can be at ANY moment, including mid-click.
+      // build() tears down and replaces the live card/pad DOM, and a
+      // browser drops a click outright if its target is removed between
+      // mousedown and mouseup -- no error, no console trace, the tap just
+      // does nothing. That is the actual cause of clicks silently not
+      // registering on vocab (and any) answer options. The decks/filters/
+      // reference chrome below is safe to refresh in place; the live
+      // queue picks up the merged state next time anything that already
+      // rebuilds it happens naturally (a deck pick, Next, a toggle).
+      renderDecks();renderFilters();renderRef();renderStatus();
+    }
+    function readLocal(){ try{return JSON.parse(localStorage.getItem(KEY)||"null");}catch(e){return null;} }
+
     if(!(window.claude && window.claude.use)){
-      // this is what a saved/downloaded copy of the file looks like --
-      // window.claude only exists when the page is actually served by
-      // claude.ai (the live Artifact link), in the app or in a browser
-      setStatus("Not synced — open this from the Claude link, not a saved file","bad");
+      // No claude.ai runtime here -- this is the static copy pushed to
+      // GitHub/Cloudflare (window.claude only exists when the page is
+      // actually served by claude.ai, in the app or in a browser). Use the
+      // Cloudflare Pages Function + KV backend instead of just reporting
+      // "not synced" -- see cloudflareSync() at the bottom of this block.
+      cloudflareSync();
       return;
     }
     setStatus("Checking sync…");
@@ -2467,96 +2565,7 @@
         return;
       }
       var ref=db.doc("progress/state");
-
-      function blob(){
-        return {deck:st.deck,mode:st.mode,answer:st.answer,session:st.session,font:st.font,
-          size:st.size,limit:st.limit,missRequeue:st.missRequeue,
-          hl:st.hl,ambigMode:st.ambigMode,depth:st.depth,
-          nounSet:st.nounSet,verbSet:st.verbSet,
-          archived:st.archived,filters:st.filters,progress:st.progress,
-          updatedAt:Date.now()};
-      }
-      // mirrors load()'s own field-by-field acceptance, so a document from an
-      // older or newer build of this page can never hand st a malformed value
-      function applyBlob(s){
-        if(!s) return;
-        if(s.deck&&(s.deck==="all"||DECK_BY_ID[s.deck])) st.deck=s.deck;
-        if(s.mode) st.mode=s.mode;
-        if(s.answer) st.answer=s.answer;
-        if(s.session) st.session=s.session;
-        if(s.font) st.font=s.font;
-        if(s.size) st.size=s.size;
-        if(s.limit) st.limit=s.limit;
-        if(s.hl) st.hl=s.hl;
-        if(s.ambigMode) st.ambigMode=s.ambigMode;
-        if(typeof s.depth==="number") st.depth=s.depth;
-        if(typeof s.missRequeue==="boolean") st.missRequeue=s.missRequeue;
-        if(s.nounSet&&typeof s.nounSet==="object") st.nounSet=Object.assign({},s.nounSet);
-        if(s.verbSet&&typeof s.verbSet==="object") st.verbSet=Object.assign({},s.verbSet);
-        // Real snapshot data from the live db capability comes back
-        // non-extensible (the platform freezes what it hands back to
-        // prevent accidental mutation). st.archived and st.progress are
-        // both used as growable dictionaries -- st.archived[key]=... on
-        // Archive word, st.progress[c.id]=p on every single graded
-        // answer (bump()) -- so adopting the remote object BY REFERENCE
-        // means the very next new key throws "Cannot add property X,
-        // object is not extensible", uncaught, right in the middle of
-        // the click handler (checkForm -> finishCheck -> bump). That
-        // aborts finishCheck before it ever reaches render(), which is
-        // why the tap looked like it did nothing at all: not a click
-        // that failed to register, but a click that registered, graded
-        // partway, then silently threw before painting anything. Copy
-        // into fresh, plain, extensible objects instead of adopting the
-        // frozen ones directly.
-        if(s.archived) st.archived=Object.assign({},s.archived);
-        if(s.progress){
-          var freshProgress={};
-          Object.keys(s.progress).forEach(function(k){ freshProgress[k]=Object.assign({},s.progress[k]); });
-          st.progress=freshProgress;
-        }
-        if(s.filters) DECKS.forEach(function(d){
-          var saved=s.filters[d.id]; if(!saved) return;
-          d.dims.forEach(function(dim){
-            var v=saved[dim.k];
-            if(v&&v.length) st.filters[d.id][dim.k]=v.filter(function(x){return dim.values.indexOf(x)>-1;});
-            if(!st.filters[d.id][dim.k].length) st.filters[d.id][dim.k]=dim.values.slice();
-          });
-        });
-      }
-      // re-stamp every toggle and rebuild, for a blob that arrived after the
-      // page had already rendered once from localStorage or its defaults
-      function refreshChrome(){
-        el("modeParse").setAttribute("aria-pressed",st.mode==="parse"?"true":"false");
-        el("modeForm").setAttribute("aria-pressed",st.mode==="form"?"true":"false");
-        el("ansRecall").setAttribute("aria-pressed",st.answer==="recall"?"true":"false");
-        el("ansReveal").setAttribute("aria-pressed",st.answer==="reveal"?"true":"false");
-        el("sessDue").setAttribute("aria-pressed",st.session==="due"?"true":"false");
-        el("sessAll").setAttribute("aria-pressed",st.session==="all"?"true":"false");
-        el("missSame").setAttribute("aria-pressed",st.missRequeue?"true":"false");
-        el("missNext").setAttribute("aria-pressed",st.missRequeue?"false":"true");
-        el("ambAny").setAttribute("aria-pressed",st.ambigMode==="any"?"true":"false");
-        el("ambAll").setAttribute("aria-pressed",st.ambigMode==="all"?"true":"false");
-        if(typeof applyHL==="function") applyHL();
-        if(typeof applyDepth==="function") applyDepth();
-        renderNounSets();
-        renderVerbSets();
-        applyLimit();applySize();applyFont();
-        // deliberately NOT build() -- this runs whenever a background sync
-        // merge lands, which can be at ANY moment, including mid-click.
-        // build() tears down and replaces the live card/pad DOM, and a
-        // browser drops a click outright if its target is removed between
-        // mousedown and mouseup -- no error, no console trace, the tap just
-        // does nothing. That is the actual cause of clicks silently not
-        // registering on vocab (and any) answer options. The decks/filters/
-        // reference chrome below is safe to refresh in place; the live
-        // queue picks up the merged state next time anything that already
-        // rebuilds it happens naturally (a deck pick, Next, a toggle).
-        renderDecks();renderFilters();renderRef();renderStatus();
-      }
-
       var lastSeenJSON=null, applyingRemote=false;
-
-      function readLocal(){ try{return JSON.parse(localStorage.getItem(KEY)||"null");}catch(e){return null;} }
 
       ref.get().then(function(snap){
         var local=readLocal(), localTs=(local&&local.updatedAt)||0;
@@ -2623,14 +2632,104 @@
         },function(){ setStatus("Not synced — connection interrupted, saved on this device only","bad"); });
       },function(){ setStatus("Not synced — saved on this device only","bad"); });
     }).catch(function(){});
+
+    // ====================================================================
+    // CLOUDFLARE FALLBACK -- backs koine-drill.pages.dev via a Pages
+    // Function (functions/api/progress.js) and a KV namespace, standing in
+    // for the claude.ai db capability above. Same blob, same whole-blob
+    // last-writer-wins rule, same local-cache-first render; the one real
+    // difference is there is no live push channel over plain KV, so this
+    // polls on a timer instead of subscribing.
+    //
+    // X-Sync-Token is NOT real security -- on a public static site,
+    // anything this file sends is visible to anyone who reads the page
+    // source. It only keeps the endpoint from being casually found and hit
+    // by scanners; it does not protect against someone who deliberately
+    // reads this file. The value below must match the SYNC_TOKEN
+    // environment variable set on the Cloudflare Pages project.
+    // ====================================================================
+    function cloudflareSync(){
+      var ENDPOINT="/api/progress";
+      var TOKEN="eed9f5d7a6b3d09344afc3ada2ac5cb35b411b4110eb4936";
+      var POLL_MS=15000;
+      var lastSeenJSON=null, applyingRemote=false;
+
+      function apiGet(){
+        return fetch(ENDPOINT,{headers:{"X-Sync-Token":TOKEN}}).then(function(r){
+          if(r.status===404) return null;
+          if(!r.ok) throw new Error("sync GET failed: "+r.status);
+          return r.json();
+        });
+      }
+      function apiPut(b){
+        return fetch(ENDPOINT,{method:"PUT",headers:{"Content-Type":"application/json","X-Sync-Token":TOKEN},
+          body:JSON.stringify(b)}).then(function(r){
+          if(!r.ok) throw new Error("sync PUT failed: "+r.status);
+        });
+      }
+
+      setStatus("Checking sync…");
+      apiGet().then(function(remote){
+        var local=readLocal(), localTs=(local&&local.updatedAt)||0;
+        if(remote){
+          var remoteTs=remote.updatedAt||0;
+          if(local&&localTs>remoteTs){
+            lastSeenJSON=JSON.stringify(local);
+            apiPut(local).catch(function(){});
+          } else {
+            applyingRemote=true; applyBlob(remote); applyingRemote=false;
+            lastSeenJSON=JSON.stringify(remote);
+            save();
+            refreshChrome();
+          }
+        } else {
+          var seed=local||blob();
+          lastSeenJSON=JSON.stringify(seed);
+          apiPut(seed).catch(function(){});
+        }
+        setStatus("Synced across your devices","ok");
+
+        var origSave=save;
+        save=function(){
+          origSave();
+          if(applyingRemote) return;
+          clearTimeout(save._t);
+          save._t=setTimeout(flushPush,1200);
+        };
+        function flushPush(){
+          save._t=null;
+          var b=blob();
+          lastSeenJSON=JSON.stringify(b);
+          apiPut(b).then(function(){ setStatus("Synced across your devices","ok"); })
+            .catch(function(){ setStatus("Not synced — saved on this device only, will retry","bad"); });
+        }
+        document.addEventListener("visibilitychange",function(){
+          if(document.visibilityState==="hidden"&&save._t) flushPush();
+        });
+        window.addEventListener("pagehide",function(){ if(save._t) flushPush(); });
+
+        // No realtime push over plain KV -- poll instead, and only while
+        // the tab is actually visible, so a change made on another device
+        // shows up here without a manual reload.
+        setInterval(function(){
+          if(document.visibilityState!=="visible") return;
+          apiGet().then(function(remote2){
+            if(!remote2) return;
+            var j=JSON.stringify(remote2);
+            if(j===lastSeenJSON) return;      // our own write echoing back
+            lastSeenJSON=j;
+            applyingRemote=true; applyBlob(remote2); applyingRemote=false;
+            save();
+            refreshChrome();
+          }).catch(function(){});
+        },POLL_MS);
+      }).catch(function(){
+        setStatus("Not synced — could not reach the sync endpoint","bad");
+      });
+    }
   })();
 
 })();
 </script>
-
-
-
-
-
 
 </body></html>
