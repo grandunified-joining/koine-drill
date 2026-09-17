@@ -79,7 +79,8 @@
      decks (vfut/vaor1/vaor2/vimpf), so an irregular past stem (ἔλαβον) stays
      anchored to its lemma (λαμβάνω) -- 2026-09-16 */
   .verb-lemma-tag{margin-left:8px;padding-left:8px;border-left:1px solid var(--line);
-    font-family:var(--grk);font-size:calc(13px * var(--ts));color:var(--ink-3);font-weight:400}
+    font-family:var(--grk);font-size:calc(13px * var(--ts));color:var(--ink-3);font-weight:400;
+    text-transform:none}
 
   header{border-bottom:1px solid var(--line);padding-bottom:14px}
   h1{font-family:var(--grk);font-size:calc(clamp(26px,4.6vw,34px) * var(--ts));
@@ -203,10 +204,8 @@
      renders in the Greek face, not the English one (2026-09-10) */
   .slip dd.grk{font-family:var(--grk)}
   .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--ink-3)}
-  /* compact badge chips -- the dimension(s) a form is ambiguous on, shown as
-     small read-only pills instead of a repeated wall of parse text
-     (2026-09-11, twelfth pass); also doubles as the read-only "required set"
-     reminder when Ambiguous forms is set to All required. */
+  /* compact badge chips -- one grouped pill per valid parse, doubling as the
+     single-parse review switcher (2026-09-16). */
   .badges{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:2px 0}
   .pbadge{display:inline-block;font-family:var(--eng);font-weight:700;letter-spacing:.02em;
     font-size:calc(12.5px * var(--ts));color:var(--ink-2);background:var(--surface-2);
@@ -502,13 +501,6 @@
       </div>
     </div>
     <div class="group">
-      <span class="label">Ambiguous forms</span>
-      <div class="seg" role="group" aria-label="Ambiguous form requirement">
-        <button id="ambAny" aria-pressed="true">Any valid</button>
-        <button id="ambAll" aria-pressed="false">All required</button>
-      </div>
-    </div>
-    <div class="group">
       <span class="label">Shade depth</span>
       <input type="range" id="depthRange" min="1" max="10" step="1" value="6" style="width:120px;vertical-align:middle">
       <span class="hint" id="depthVal" style="min-width:14px;display:inline-block;text-align:center">6</span>
@@ -758,7 +750,10 @@
 
   var st={deck:DECKS[0].id,mode:"parse",answer:"recall",session:"due",font:"gentium",size:"normal",limit:"none",
     hl:"bold",             // synced setting: target-word highlight style in example sentences (item 4)
-    ambigMode:"any",       // synced setting: "any" valid parse, or "all" required (item 7)
+    ambigMode:"any",       // vestigial (2026-09-17): the "Any valid / All required"
+                           // Settings toggle is gone -- ambiguous forms always
+                           // require every valid parse now. Field kept, unused,
+                           // only so an older synced blob still loads cleanly.
     depth:6,               // synced setting: verdict wash depth, 1-10 (item 12)
     missRequeue:true,     // synced setting: does a miss come back again THIS sitting?
     nounSet:{},           // synced setting: st.nounSet["n2|masculine"] etc = index into
@@ -1220,7 +1215,8 @@
       // line at all, so they keep their gloss -- it is their only translation.
       var nounDeck=["n1","n2","n3"].indexOf(c.deck.id)>-1;
       back.innerHTML=top(dn,
-          res?'<span class="verdict '+(res.ok?"ok":"no")+'">'+(res.ok?"✓":"✕")+'</span>':"Answer")+
+          res?'<span class="verdict '+(res.ok?"ok":"no")+'">'+(res.ok?"✓":"✕")+'</span>':"Answer",
+          vlemP?' <span class="verb-lemma-tag">'+vlemP+'</span>':"")+
         '<div class="face-body">'+
           // paradigm shown here too, 2026-09-10 -- same dt/dd slip format
           // and same spot (top of the face body) as the question side
@@ -1317,7 +1313,8 @@
       }).join("");
       back.innerHTML=top(dn,
           res?'<span class="verdict '+verdictCls+'">'+verdictIcon+'</span>'
-             :(multiRow?c.rows.length+" parsings":"1 parsing"))+
+             :(multiRow?c.rows.length+" parsings":"1 parsing"),
+          vlem?' <span class="verb-lemma-tag">'+vlem+'</span>':"")+
         '<div class="face-body"><p class="asked"><span class="grk">'+c.form+'</span></p>'+
         (sharedText?'<p class="parseline">'+sharedText+'</p>':"")+
         groupRow+
@@ -1336,6 +1333,10 @@
   back.addEventListener("click",function(e){
     var btn=e.target.closest&&e.target.closest("#parseSwitch .pbadge");
     if(!btn) return;
+    // The card itself flips on any click (card.addEventListener("click",
+    // toggleFlip) below) -- without this, switching parses while looking at
+    // the back face immediately flips the card back over (2026-09-17).
+    e.stopPropagation();
     var idx=parseInt(btn.getAttribute("data-idx"),10);
     if(isNaN(idx)) return;
     st.reviewIdx=idx;
@@ -1447,15 +1448,15 @@
       if(c.rows.length>1){
         var note=document.createElement("p");
         note.className="hint";note.style.margin="0 0 2px";
-        note.textContent=st.ambigMode==="all"
-          ? "This form has "+c.rows.length+" valid parses — fill in every table below."
-          : "This form has "+c.rows.length+" valid parses — any one of them counts.";
+        note.textContent="This form has "+c.rows.length+" valid parses — fill in every table below.";
         pad.appendChild(note);
       }
-      var needAll=(st.ambigMode==="all"&&c.rows.length>1);
+      // Every valid parse always gets its own full table now (2026-09-17) --
+      // there is no more lenient "any one counts" mode. A genuinely
+      // ambiguous form always requires full credit on every parse.
+      var needAll=(c.rows.length>1);
       if(needAll){
-        // "All required" on a genuinely ambiguous form: one full
-        // parse-selector table per valid parse (2026-09-16) -- not
+        // One full parse-selector table per valid parse -- not
         // independently multi-selectable dimension rows, which let a
         // student tick every value on every dimension without ever
         // confirming which value pairs with which (1st-Sg vs. the invalid
@@ -1490,8 +1491,8 @@
           pad.appendChild(table);
         });
       } else {
-        // A single set of dimension rows: either the form isn't ambiguous,
-        // or "Any valid" mode only needs the one parse you actually know.
+        // A single set of dimension rows -- this form isn't ambiguous
+        // (c.rows.length===1), so there is only ever one right answer.
         dimsP.forEach(function(dim){
           var wrap=document.createElement("div");wrap.className="padrow";
           var l=document.createElement("span");
@@ -1523,7 +1524,7 @@
   }
   function complete(c){
     var dims=askedDims(c.deck);
-    if(st.ambigMode==="all"&&c.rows.length>1){
+    if(c.rows.length>1){
       return Array.isArray(st.sel.blocks)&&st.sel.blocks.length===c.rows.length&&
         st.sel.blocks.every(function(blk){return dims.every(function(dim){return !!blk[dim.k];});});
     }
@@ -1541,13 +1542,12 @@
     if(!c||st.result||!complete(c)) return;
     var dims=askedDims(c.deck);
     var ok,partial=false,chosen;
-    if(st.ambigMode==="all"&&c.rows.length>1){
+    if(c.rows.length>1){
       // Bijection check: each filled-in table must match a distinct valid
       // row exactly, on every dimension at once -- this is what actually
       // confirms the pairing (1st-Sg vs. 3rd-Pl), not just that both values
-      // were selected somewhere (2026-09-16, replacing the old
-      // per-dimension membership check that couldn't tell a valid pairing
-      // from an invalid cross-pairing).
+      // were selected somewhere. Every parse has to match for full credit --
+      // there is no more lenient "any one counts" mode (2026-09-17).
       var rows=c.rows.slice(),usedRow=rows.map(function(){return false;}),matched=0;
       st.sel.blocks.forEach(function(blk){
         for(var i=0;i<rows.length;i++){
@@ -1561,8 +1561,8 @@
       partial=!ok&&matched>0;
       chosen={blocks:st.sel.blocks.slice()};
     } else {
-      // "Any valid": correct if the single selection matches any one of
-      // this form's valid parses.
+      // Not ambiguous: correct if the single selection matches this form's
+      // one valid parse.
       ok=c.rows.some(function(row){return dims.every(function(dim){return st.sel[dim.k]===row[dim.k];});});
       chosen={};dims.forEach(function(dim){chosen[dim.k]=st.sel[dim.k];});
     }
@@ -2267,13 +2267,6 @@
     el(f[0]).addEventListener("click",function(){st.hl=f[1];save();applyHL();render();});
   });
   applyHL();
-  // Ambiguous forms (item 7): any valid vs all required. Soft -- it changes
-  // how the current card is graded, not which cards exist -- but a
-  // half-made selection in the old shape (scalar vs array) has to be
-  // cleared or complete()/checkParse() could see stale data.
-  seg("ambAny","ambAll","ambigMode","any","all",null,function(){
-    if(!st.result){st.sel={};renderPad();}
-  });
   // Shade depth (item 12): 1-10 maps to a 10%-46% color-mix tint, replacing
   // the old flat 18%. Just a CSS variable -- no re-render needed.
   function applyDepth(){
@@ -2704,8 +2697,6 @@
       el("sessAll").setAttribute("aria-pressed",st.session==="all"?"true":"false");
       el("missSame").setAttribute("aria-pressed",st.missRequeue?"true":"false");
       el("missNext").setAttribute("aria-pressed",st.missRequeue?"false":"true");
-      el("ambAny").setAttribute("aria-pressed",st.ambigMode==="any"?"true":"false");
-      el("ambAll").setAttribute("aria-pressed",st.ambigMode==="all"?"true":"false");
       if(typeof applyHL==="function") applyHL();
       if(typeof applyDepth==="function") applyDepth();
       renderNounSets();
