@@ -263,23 +263,6 @@
     color:var(--ink);padding:9px 16px;border-radius:6px;cursor:pointer}
   .btn:hover{border-color:var(--ink-3)}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-  /* custom Greek-type picker (2026-09-16): each option previews ἄνθρωπος in
-     its own face, aligned into a fixed-width column so the previews line up
-     regardless of how wide that font renders the word */
-  .fontpicker{position:relative;display:inline-block}
-  .fontpicker-btn{display:inline-flex;align-items:center;gap:10px}
-  .fontpicker-preview{font-size:calc(18px * var(--ts));color:var(--ink)}
-  .fontpicker-caret{color:var(--ink-3);font-size:10px;margin-left:2px}
-  .fontpicker-list{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:240px;
-    background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;
-    box-shadow:var(--shadow);padding:5px;display:flex;flex-direction:column;gap:1px;
-    max-height:320px;overflow:auto}
-  .fontopt{display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;
-    font-family:var(--eng);font-size:calc(13.5px * var(--ts));color:var(--ink-2);
-    background:transparent;border:0;border-radius:6px;padding:7px 9px;cursor:pointer}
-  .fontopt:hover{background:var(--surface-2)}
-  .fontopt[aria-selected="true"]{background:var(--accent-soft);color:var(--ink)}
-  .fontopt .grk{flex:none;width:70px;font-size:calc(19px * var(--ts));color:var(--ink);text-align:left}
   .btn.again{color:var(--bad);border-color:var(--bad)}
   .btn.got{color:var(--good);border-color:var(--good)}
   .btn:disabled{opacity:.4;cursor:default}
@@ -470,15 +453,7 @@
     </div>
     <div class="group">
       <span class="label">Greek type</span>
-      <div class="fontpicker" id="fontPicker">
-        <button type="button" class="btn fontpicker-btn" id="fontPickerBtn" aria-haspopup="listbox" aria-expanded="false">
-          <span class="grk fontpicker-preview" id="fontPickerPreview">ἄνθρωπος</span>
-          <span id="fontPickerLabel">Gentium Book Plus</span>
-          <span class="fontpicker-caret">▾</span>
-        </button>
-        <div class="fontpicker-list" id="fontPickerList" role="listbox" aria-label="Greek typeface" hidden></div>
-      </div>
-      <select id="fontSelect" aria-hidden="true" hidden>
+      <select id="fontSelect" class="btn" aria-label="Greek typeface" style="font-family:var(--eng);padding:6px 10px">
         <option value="gentium">Gentium Book Plus</option>
         <option value="cardo">Cardo</option>
         <option value="didot">GFS Didot</option>
@@ -2173,68 +2148,11 @@
   });
   applySize();
 
-  // Custom Greek-type picker (2026-09-16): each option previews ἄνθρωπος set
-  // in that font, in a fixed-width column so every preview lines up. The
-  // hidden native <select> stays the single source of truth for st.font --
-  // picking an option here just sets its value and dispatches the same
-  // 'change' event the old visible select fired, so applyFont() and every
-  // other consumer of st.font/save() keep working unmodified.
-  var FONTS=[
-    ["gentium","Gentium Book Plus",'"Gentium Book Plus","Palatino Linotype",Palatino,Georgia,serif'],
-    ["cardo","Cardo",'"Cardo","Gentium Book Plus",Georgia,serif'],
-    ["didot","GFS Didot",'"GFS Didot","Gentium Book Plus",Georgia,serif'],
-    ["neohellenic","GFS Neohellenic",'"GFS Neohellenic","Gentium Book Plus",Georgia,serif'],
-    ["noto","Noto Sans",'"Noto Sans","Gentium Book Plus",Georgia,serif'],
-    ["garamond","EB Garamond",'"EB Garamond","Gentium Book Plus",Georgia,serif'],
-    ["notoserif","Noto Serif",'"Noto Serif","Gentium Book Plus",Georgia,serif'],
-    ["oldstandard","Old Standard TT",'"Old Standard TT","Gentium Book Plus",Georgia,serif'],
-    ["alegreya","Alegreya Sans",'"Alegreya Sans","Gentium Book Plus",Georgia,serif'],
-    ["arimo","Arimo",'"Arimo","Gentium Book Plus",Georgia,serif']
-  ];
-  function buildFontPicker(){
-    var list=el("fontPickerList");
-    list.innerHTML="";
-    FONTS.forEach(function(f){
-      var b=document.createElement("button");
-      b.type="button";b.className="fontopt";b.setAttribute("role","option");
-      b.setAttribute("data-val",f[0]);
-      b.innerHTML='<span class="grk" style="font-family:'+f[2]+'">ἄνθρωπος</span><span>'+f[1]+'</span>';
-      b.addEventListener("click",function(){
-        el("fontSelect").value=f[0];
-        el("fontSelect").dispatchEvent(new Event("change",{bubbles:true}));
-        closeFontPicker();
-      });
-      list.appendChild(b);
-    });
-  }
-  function openFontPicker(){
-    el("fontPickerList").hidden=false;
-    el("fontPickerBtn").setAttribute("aria-expanded","true");
-  }
-  function closeFontPicker(){
-    el("fontPickerList").hidden=true;
-    el("fontPickerBtn").setAttribute("aria-expanded","false");
-  }
-  el("fontPickerBtn").addEventListener("click",function(e){
-    e.stopPropagation();
-    if(el("fontPickerList").hidden) openFontPicker(); else closeFontPicker();
-  });
-  document.addEventListener("click",function(e){
-    if(!el("fontPicker").contains(e.target)) closeFontPicker();
-  });
-  buildFontPicker();
-
   function applyFont(){
     // "gentium" is the default face declared on :root, so it carries no attribute
     if(st.font==="gentium") document.documentElement.removeAttribute("data-grk");
     else document.documentElement.setAttribute("data-grk",st.font);
     el("fontSelect").value=st.font;
-    var f=FONTS.filter(function(x){return x[0]===st.font;})[0]||FONTS[0];
-    el("fontPickerPreview").style.fontFamily=f[2];
-    el("fontPickerLabel").textContent=f[1];
-    Array.prototype.forEach.call(el("fontPickerList").children,function(b){
-      b.setAttribute("aria-selected",b.getAttribute("data-val")===st.font?"true":"false");
-    });
   }
   el("fontSelect").addEventListener("change",function(){
     st.font=el("fontSelect").value;save();applyFont();
