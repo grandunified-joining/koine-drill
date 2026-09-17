@@ -75,6 +75,11 @@
      name, so the deck name stays the more prominent label */
   .gender-tag{margin-left:8px;padding-left:8px;border-left:1px solid var(--line);
     font-size:calc(11px * var(--ts));color:var(--ink-3);font-weight:600}
+  /* present-tense citation form beside the deck name on non-present verb
+     decks (vfut/vaor1/vaor2/vimpf), so an irregular past stem (ἔλαβον) stays
+     anchored to its lemma (λαμβάνω) -- 2026-09-16 */
+  .verb-lemma-tag{margin-left:8px;padding-left:8px;border-left:1px solid var(--line);
+    font-family:var(--grk);font-size:calc(13px * var(--ts));color:var(--ink-3);font-weight:400}
 
   header{border-bottom:1px solid var(--line);padding-bottom:14px}
   h1{font-family:var(--grk);font-size:calc(clamp(26px,4.6vw,34px) * var(--ts));
@@ -207,6 +212,20 @@
     font-size:calc(12.5px * var(--ts));color:var(--ink-2);background:var(--surface-2);
     border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px}
   .pbadge.grk{font-family:var(--grk);font-size:calc(14px * var(--ts));font-weight:400}
+  /* grouped-per-parse pills doubling as the single-parse-view switcher
+     (2026-09-16) -- each pill is one whole valid parse ("1st Sg"), not one
+     dimension value pooled across parses, and clicking one shows just that
+     parse's detail below */
+  #parseSwitch .pbadge{cursor:pointer}
+  #parseSwitch .pbadge.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  /* one full parse-selector table per valid parse, "All required" mode on a
+     genuinely ambiguous form (2026-09-16) -- replaces independently
+     multi-selectable dimension rows, which let a student pick every value on
+     each dimension without ever confirming which value pairs with which */
+  .parse-block{border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    display:flex;flex-direction:column;gap:6px}
+  .parse-block-head{font-family:var(--eng);font-weight:700;text-transform:uppercase;
+    letter-spacing:.05em;font-size:calc(11px * var(--ts));color:var(--ink-3)}
   /* target-word highlight inside an example sentence -- three styles a
      reader can pick between in Settings (2026-09-11, twelfth pass) */
   .hl-word.hl-bold{font-weight:800}
@@ -245,6 +264,23 @@
     color:var(--ink);padding:9px 16px;border-radius:6px;cursor:pointer}
   .btn:hover{border-color:var(--ink-3)}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  /* custom Greek-type picker (2026-09-16): each option previews ἄνθρωπος in
+     its own face, aligned into a fixed-width column so the previews line up
+     regardless of how wide that font renders the word */
+  .fontpicker{position:relative;display:inline-block}
+  .fontpicker-btn{display:inline-flex;align-items:center;gap:10px}
+  .fontpicker-preview{font-size:calc(18px * var(--ts));color:var(--ink)}
+  .fontpicker-caret{color:var(--ink-3);font-size:10px;margin-left:2px}
+  .fontpicker-list{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:240px;
+    background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;
+    box-shadow:var(--shadow);padding:5px;display:flex;flex-direction:column;gap:1px;
+    max-height:320px;overflow:auto}
+  .fontopt{display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;
+    font-family:var(--eng);font-size:calc(13.5px * var(--ts));color:var(--ink-2);
+    background:transparent;border:0;border-radius:6px;padding:7px 9px;cursor:pointer}
+  .fontopt:hover{background:var(--surface-2)}
+  .fontopt[aria-selected="true"]{background:var(--accent-soft);color:var(--ink)}
+  .fontopt .grk{flex:none;width:70px;font-size:calc(19px * var(--ts));color:var(--ink);text-align:left}
   .btn.again{color:var(--bad);border-color:var(--bad)}
   .btn.got{color:var(--good);border-color:var(--good)}
   .btn:disabled{opacity:.4;cursor:default}
@@ -435,7 +471,15 @@
     </div>
     <div class="group">
       <span class="label">Greek type</span>
-      <select id="fontSelect" class="btn" aria-label="Greek typeface" style="font-family:var(--eng);padding:6px 10px">
+      <div class="fontpicker" id="fontPicker">
+        <button type="button" class="btn fontpicker-btn" id="fontPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="grk fontpicker-preview" id="fontPickerPreview">ἄνθρωπος</span>
+          <span id="fontPickerLabel">Gentium Book Plus</span>
+          <span class="fontpicker-caret">▾</span>
+        </button>
+        <div class="fontpicker-list" id="fontPickerList" role="listbox" aria-label="Greek typeface" hidden></div>
+      </div>
+      <select id="fontSelect" aria-hidden="true" hidden>
         <option value="gentium">Gentium Book Plus</option>
         <option value="cardo">Cardo</option>
         <option value="didot">GFS Didot</option>
@@ -728,7 +772,7 @@
                            // alone -- see rollVerbs() (2026-09-10, ninth pass).
     filters:{},           // filters[deckId][dimKey] = [values]
     queue:[],pos:0,flipped:false,snap:false,peeked:false,got:0,missed:0,result:null,
-    sel:{},grid:[],built:[],rot:{},progress:{},archived:{},
+    sel:{},reviewIdx:0,grid:[],built:[],rot:{},progress:{},archived:{},
     started:0,answered:0,done:false,pendingDone:false,missedList:[],
     testMode:false};      // NOT persisted or synced -- always starts off on a fresh load
 
@@ -976,7 +1020,7 @@
         return (pa?pa.box:1.5)-(pb?pb.box:1.5)||Math.random()-0.5;
       });
     }else{ d=shuffle(p.slice()); }
-    st.queue=d;st.pos=0;st.flipped=false;st.result=null;st.peeked=false;st.got=0;st.missed=0;st.sel={};
+    st.queue=d;st.pos=0;st.flipped=false;st.result=null;st.peeked=false;st.got=0;st.missed=0;st.sel={};st.reviewIdx=0;
     st.started=Date.now();st.answered=0;st.done=false;st.pendingDone=false;st.missedList=[];
     newGrid();st.snap=true;render();
   }
@@ -1036,6 +1080,21 @@
   function top(l,rt,extra){
     return '<div class="face-top"><span class="label'+grkCls(l)+'">'+l+(extra||"")+'</span>'+
            '<span class="label'+grkCls(rt)+'">'+rt+'</span></div>';
+  }
+  // Present-tense citation form, for the non-present verb decks only
+  // (vfut/vaor1/vaor2/vimpf -- vmi and vmp are themselves present-tense, so a
+  // present-tense tag on them would be circular). Every verb deck's `lemma`
+  // field is a " · "-joined list of present-tense forms in the exact same
+  // order as that deck's dimPara("Verb",[...]) values array, so the row's
+  // own pd (paradigm key) locates its lemma with no new data (2026-09-16).
+  var PRESENT_TAG_DECKS=["vfut","vaor1","vaor2","vimpf"];
+  function presentLemmaOf(c,row){
+    if(!row||PRESENT_TAG_DECKS.indexOf(c.deck.id)<0||!c.deck.lemma) return "";
+    var paraDim=c.deck.dims.filter(function(d){return d.k==="pd";})[0];
+    if(!paraDim) return "";
+    var i=paraDim.values.indexOf(row.pd);
+    if(i<0) return "";
+    return c.deck.lemma.split(" · ")[i]||"";
   }
   // what word this card is drilling, in Greek and English
   function lead(c,row){
@@ -1138,12 +1197,13 @@
       // see NOUNSETS above. No extra gating needed here: a mismatched
       // word/slot combination simply never gets row.ex set in the first place.
       var showEx=!!row.ex;
+      var vlemP=presentLemmaOf(c,row);
       front.className="face front";
       // Question side is Greek-only, in both directions (2026-09-11, twelfth
       // pass): promptLead()'s English gloss ("the", "the human being"...)
       // used to sit right here -- dropped, not just for this deck but
       // everywhere, per the same rule applied below for Form -> Parse.
-      front.innerHTML=top(dn,boxLabel(c))+
+      front.innerHTML=top(dn,boxLabel(c),vlemP?' <span class="verb-lemma-tag">'+vlemP+'</span>':"")+
         '<div class="face-body">'+slipHTML(c,row)+'</div>'+
         '<div class="face-foot">'+(st.answer==="recall"?"Pick the form below.":"Say it aloud, then flip.")+'</div>';
       var corr="";
@@ -1187,17 +1247,27 @@
         var pd0=c.rows[0].pd,pdUni=c.rows.every(function(x){return x.pd===pd0;});
         if(pdUni) nounGend=nounGenderLabel(pd0);
       }
+      // Present-tense citation form, non-present verb decks only, same
+      // "every row agrees" guard -- see presentLemmaOf() (2026-09-16).
+      var vlem=null;
+      if(PRESENT_TAG_DECKS.indexOf(c.deck.id)>-1){
+        var vpd0=c.rows[0].pd,vpdUni=c.rows.every(function(x){return x.pd===vpd0;});
+        if(vpdUni) vlem=presentLemmaOf(c,c.rows[0]);
+      }
       front.className="face front";
       // Question side is Greek-only, in both directions (2026-09-11, twelfth
       // pass) -- promptLead()'s English gloss used to sit under the Greek
-      // form here too. Dropped.
-      front.innerHTML=top(dn,boxLabel(c),nounGend?' <span class="gender-tag">'+nounGend+'</span>':"")+
+      // form here too. Dropped. The old face-foot instruction text
+      // ("Select every parse below." / "Give every parse this form can
+      // carry.") is gone too (2026-09-16) -- replaced by an explicit,
+      // count-stating note at the top of the answer pad itself, only when
+      // the card is genuinely ambiguous (see renderPad()).
+      front.innerHTML=top(dn,boxLabel(c),
+          nounGend?' <span class="gender-tag">'+nounGend+'</span>'
+            :(vlem?' <span class="verb-lemma-tag">'+vlem+'</span>':""))+
         '<div class="face-body">'+
           '<div class="greek-big '+(uni?colorOf(g0):"")+sizeCls(c.form)+'">'+c.form+'</div>'+
-        '</div>'+
-        '<div class="face-foot">'+(st.answer==="recall"
-          ? "Select every parse below."
-          : "Give every parse this form can carry.")+'</div>';
+        '</div>';
 
       // Which dims actually vary across this form's valid parses -- the
       // "ambiguous dimension" items 5 and 7 are both about. Everything else
@@ -1205,62 +1275,72 @@
       var varying=dims.filter(function(dim){return uniq(c.rows.map(function(r){return r[dim.k];})).length>1;});
       var shared=dims.filter(function(dim){return varying.indexOf(dim)<0;});
       var sharedText=shared.map(function(dim){return c.rows[0][dim.k];}).join(" · ");
-      // Compact badge-chip readout of every value this form can carry on
-      // the varying dimension(s) -- e.g. "Masc / Fem / Neut" -- replacing
-      // the old wall of "Case · Number · Gender" text repeated once per row
-      // (2026-09-11, twelfth pass). In "all required" mode this same row
-      // doubles as the read-only reminder of the full required set.
-      var badgeRow=varying.length?('<div class="badges">'+
-        varying.map(function(dim){
-          return uniq(c.rows.map(function(r){return r[dim.k];})).map(function(v){
-            var lbl=shortOf(v,c.deck);
-            return '<span class="pbadge'+grkCls(lbl)+'">'+lbl+'</span>';
-          }).join("");
+      // One pill per valid PARSE, not per dimension value -- "1st Sg" /
+      // "3rd Pl" as grouped, clickable units, rather than the old pooled
+      // "1st 3rd Sg Pl" which wrongly implied every cross-combination (e.g.
+      // 1st Pl) was valid too (2026-09-16). Doubles as the single-parse
+      // review switcher: click a pill to see just that parse's own detail
+      // (context sentence, gloss) below, instead of every parse stacked.
+      if(st.reviewIdx==null||st.reviewIdx>=c.rows.length) st.reviewIdx=0;
+      var multiRow=c.rows.length>1;
+      var groupRow=(multiRow&&varying.length)?('<div class="badges" id="parseSwitch">'+
+        c.rows.map(function(x,idx){
+          var lbl=varying.map(function(dim){return shortOf(x[dim.k],c.deck);}).join(" ");
+          return '<button type="button" class="pbadge'+grkCls(lbl)+
+            (idx===st.reviewIdx?" active":"")+'" data-idx="'+idx+'">'+lbl+'</button>';
         }).join("")+'</div>'):"";
 
       var corr2="";
       if(res&&!res.ok){
-        var chosenTxt=dims.map(function(dim){
-          var v=res.chosen[dim.k],vals=Array.isArray(v)?v:[v];
-          return vals.map(function(vv){return shortOf(vv,c.deck);}).join("/");
-        }).join(" ");
-        var validTxt=dims.map(function(dim){
-          return uniq(c.rows.map(function(r){return r[dim.k];})).map(function(v){return shortOf(v,c.deck);}).join("/");
-        }).join(" ");
+        var chosenTxt=(res.chosen&&res.chosen.blocks)
+          ? res.chosen.blocks.map(function(blk){
+              return dims.map(function(dim){return blk[dim.k]?shortOf(blk[dim.k],c.deck):"—";}).join(" ");
+            }).join(" / ")
+          : dims.map(function(dim){return res.chosen[dim.k]?shortOf(res.chosen[dim.k],c.deck):"—";}).join(" ");
+        var validTxt=c.rows.map(function(r){
+          return dims.map(function(dim){return shortOf(r[dim.k],c.deck);}).join(" ");
+        }).join(" / ");
         corr2='<p class="correction">You chose '+chosenTxt+
           (res.partial?' — missing some: ':' — valid: ')+validTxt+'.</p>';
       }
       var verdictCls=res?(res.ok?"ok":(res.partial?"partial":"no")):"";
       var verdictIcon=res?(res.ok?"✓":(res.partial?"±":"✕")):"";
       back.className="face back"+(res?(" "+verdictCls):"");
+      // Single-parse review: only the currently-switched-to row's own detail
+      // (chip + context sentence) is shown, not every valid row stacked
+      // (2026-09-16).
+      var activeRow=c.rows[st.reviewIdx]||c.rows[0];
+      var showEx=!!activeRow.ex;
+      var activeChip=varying.map(function(dim){
+        var lbl=shortOf(activeRow[dim.k],c.deck);
+        return '<span class="pbadge'+grkCls(lbl)+'">'+lbl+'</span>';
+      }).join("");
       back.innerHTML=top(dn,
           res?'<span class="verdict '+verdictCls+'">'+verdictIcon+'</span>'
-             :(c.rows.length>1?c.rows.length+" parsings":"1 parsing"))+
+             :(multiRow?c.rows.length+" parsings":"1 parsing"))+
         '<div class="face-body"><p class="asked"><span class="grk">'+c.form+'</span></p>'+
         (sharedText?'<p class="parseline">'+sharedText+'</p>':"")+
-        badgeRow+
+        groupRow+
         '<div class="parse-list">'+
-          c.rows.map(function(x){
-            // x.ex is only ever set when the active word for this paradigm
-            // has a sentence written for this exact slot (see rollNouns()) --
-            // no separate rotation gate needed. The English gloss stacks
-            // under the Greek clause instead of sitting inline beside it --
-            // one long line of Greek + English was the thing most prone to
-            // wrapping badly at phone width.
-            var showEx=!!x.ex;
-            var chip=varying.map(function(dim){
-              var lbl=shortOf(x[dim.k],c.deck);
-              return '<span class="pbadge'+grkCls(lbl)+'">'+lbl+'</span>';
-            }).join("");
-            if(!chip&&!showEx) return "";
-            return '<div class="parse-line"><span class="dot"></span>'+chip+'</div>'+
-              (showEx?'<div class="parse-ex"><span class="grk">'+hlWord(x.ex,x.form)+'</span></div>'+
-                '<div class="hint" style="margin:-2px 0 4px">'+x.exEn+'</div>':"");
-          }).join("")+
-        '</div>'+corr2+'</div>'+backNotes(c,c.rows[0])+
-        (c.rows.length>1?'<div class="face-foot">Ambiguous in isolation — context decides.</div>':"");
+          (activeChip?'<div class="parse-line"><span class="dot"></span>'+activeChip+'</div>':"")+
+          (showEx?'<div class="parse-ex"><span class="grk">'+hlWord(activeRow.ex,activeRow.form)+'</span></div>'+
+            '<div class="hint" style="margin:-2px 0 4px">'+activeRow.exEn+'</div>':"")+
+        '</div>'+corr2+'</div>'+backNotes(c,activeRow)+
+        (multiRow?'<div class="face-foot">Ambiguous in isolation — context decides.</div>':"");
     }
   }
+  // Clicking a grouped parse pill (#parseSwitch) switches which parse's
+  // detail the back face shows -- delegated once here rather than rebound
+  // on every render, since the pills themselves are rebuilt each render
+  // (2026-09-16).
+  back.addEventListener("click",function(e){
+    var btn=e.target.closest&&e.target.closest("#parseSwitch .pbadge");
+    if(!btn) return;
+    var idx=parseInt(btn.getAttribute("data-idx"),10);
+    if(isNaN(idx)) return;
+    st.reviewIdx=idx;
+    renderFaceBodies();
+  });
 
   // ---------- answer pad ----------
   function renderPad(){
@@ -1360,39 +1440,78 @@
       });
       pad.appendChild(lab);pad.appendChild(grid);
     } else {
-      // "All required": the dimension this exact form is genuinely
-      // ambiguous on (Gender, for τῶν, say) becomes multi-select chips, so
-      // every matching slot has to be picked before Check unlocks. A dim
-      // every row of this card agrees on stays single-select either way --
-      // there is only ever one right answer for it (2026-09-11, twelfth
-      // pass, item 7).
-      askedDims(c.deck).forEach(function(dim){
-        var req=uniq(c.rows.map(function(r){return r[dim.k];}));
-        var multi=st.ambigMode==="all"&&req.length>1;
-        var wrap=document.createElement("div");wrap.className="padrow";
-        var l=document.createElement("span");
-        l.className="label";l.style.minWidth="66px";l.textContent=dim.label;
-        wrap.appendChild(l);
-        dim.values.forEach(function(v){
-          var b=document.createElement("button");
-          var lbl=shortOf(v,c.deck);
-          b.className="opt "+grkCls(lbl);b.type="button";b.textContent=lbl;b.title=v;
-          var sel=st.sel[dim.k];
-          var on=multi?(Array.isArray(sel)&&sel.indexOf(v)>-1):(sel===v);
-          b.setAttribute("aria-pressed",on?"true":"false");
-          b.addEventListener("click",function(){
-            if(multi){
-              var arr=Array.isArray(st.sel[dim.k])?st.sel[dim.k].slice():[];
-              var i=arr.indexOf(v);
-              if(i>-1) arr.splice(i,1); else arr.push(v);
-              st.sel[dim.k]=arr;
-            } else st.sel[dim.k]=v;
-            renderPad();
+      var dimsP=askedDims(c.deck);
+      // Explicit, count-stating note at the TOP of the answer pad, only
+      // when this form is genuinely ambiguous -- replaces the old generic
+      // face-foot text (2026-09-16).
+      if(c.rows.length>1){
+        var note=document.createElement("p");
+        note.className="hint";note.style.margin="0 0 2px";
+        note.textContent=st.ambigMode==="all"
+          ? "This form has "+c.rows.length+" valid parses — fill in every table below."
+          : "This form has "+c.rows.length+" valid parses — any one of them counts.";
+        pad.appendChild(note);
+      }
+      var needAll=(st.ambigMode==="all"&&c.rows.length>1);
+      if(needAll){
+        // "All required" on a genuinely ambiguous form: one full
+        // parse-selector table per valid parse (2026-09-16) -- not
+        // independently multi-selectable dimension rows, which let a
+        // student tick every value on every dimension without ever
+        // confirming which value pairs with which (1st-Sg vs. the invalid
+        // 1st-Pl). Each table is graded as its own complete parse.
+        if(!Array.isArray(st.sel.blocks)||st.sel.blocks.length!==c.rows.length){
+          st.sel={blocks:c.rows.map(function(){return {};})};
+        }
+        c.rows.forEach(function(row,ridx){
+          var table=document.createElement("div");table.className="parse-block";
+          var head=document.createElement("div");
+          head.className="parse-block-head";head.textContent="Parse "+(ridx+1);
+          table.appendChild(head);
+          dimsP.forEach(function(dim){
+            var wrap=document.createElement("div");wrap.className="padrow";
+            var l=document.createElement("span");
+            l.className="label";l.style.minWidth="66px";l.textContent=dim.label;
+            wrap.appendChild(l);
+            dim.values.forEach(function(v){
+              var b=document.createElement("button");
+              var lbl=shortOf(v,c.deck);
+              b.className="opt "+grkCls(lbl);b.type="button";b.textContent=lbl;b.title=v;
+              var sel=st.sel.blocks[ridx][dim.k];
+              b.setAttribute("aria-pressed",sel===v?"true":"false");
+              b.addEventListener("click",function(){
+                st.sel.blocks[ridx][dim.k]=v;
+                renderPad();
+              });
+              wrap.appendChild(b);
+            });
+            table.appendChild(wrap);
           });
-          wrap.appendChild(b);
+          pad.appendChild(table);
         });
-        pad.appendChild(wrap);
-      });
+      } else {
+        // A single set of dimension rows: either the form isn't ambiguous,
+        // or "Any valid" mode only needs the one parse you actually know.
+        dimsP.forEach(function(dim){
+          var wrap=document.createElement("div");wrap.className="padrow";
+          var l=document.createElement("span");
+          l.className="label";l.style.minWidth="66px";l.textContent=dim.label;
+          wrap.appendChild(l);
+          dim.values.forEach(function(v){
+            var b=document.createElement("button");
+            var lbl=shortOf(v,c.deck);
+            b.className="opt "+grkCls(lbl);b.type="button";b.textContent=lbl;b.title=v;
+            var on=(st.sel[dim.k]===v);
+            b.setAttribute("aria-pressed",on?"true":"false");
+            b.addEventListener("click",function(){
+              st.sel[dim.k]=v;
+              renderPad();
+            });
+            wrap.appendChild(b);
+          });
+          pad.appendChild(wrap);
+        });
+      }
       var foot=document.createElement("div");foot.className="padrow";
       var chk=document.createElement("button");
       chk.className="btn primary";chk.type="button";chk.textContent="Check";
@@ -1403,12 +1522,12 @@
     }
   }
   function complete(c){
-    return askedDims(c.deck).every(function(dim){
-      var req=uniq(c.rows.map(function(r){return r[dim.k];}));
-      var multi=st.ambigMode==="all"&&req.length>1;
-      var sel=st.sel[dim.k];
-      return multi?(Array.isArray(sel)&&sel.length===req.length):!!sel;
-    });
+    var dims=askedDims(c.deck);
+    if(st.ambigMode==="all"&&c.rows.length>1){
+      return Array.isArray(st.sel.blocks)&&st.sel.blocks.length===c.rows.length&&
+        st.sel.blocks.every(function(blk){return dims.every(function(dim){return !!blk[dim.k];});});
+    }
+    return dims.every(function(dim){return !!st.sel[dim.k];});
   }
 
   function checkForm(f){
@@ -1421,28 +1540,32 @@
     var c=st.queue[st.pos];
     if(!c||st.result||!complete(c)) return;
     var dims=askedDims(c.deck);
-    function selHas(dim,v){
-      var s=st.sel[dim.k];
-      return Array.isArray(s)?s.indexOf(v)>-1:s===v;
-    }
-    function rowSelected(row){return dims.every(function(dim){return selHas(dim,row[dim.k]);});}
-    var anyValid=c.rows.some(rowSelected);
-    var ok,partial=false;
-    if(st.ambigMode==="all"){
-      // full credit: every row this form covers was selected, and no
-      // multi-select dim carries an extra, invalid pick alongside them
-      var allValid=c.rows.every(rowSelected)&&dims.every(function(dim){
-        var s=st.sel[dim.k];
-        if(!Array.isArray(s)) return true;
-        var req=uniq(c.rows.map(function(r){return r[dim.k];}));
-        return s.length===req.length&&req.every(function(v){return s.indexOf(v)>-1;});
+    var ok,partial=false,chosen;
+    if(st.ambigMode==="all"&&c.rows.length>1){
+      // Bijection check: each filled-in table must match a distinct valid
+      // row exactly, on every dimension at once -- this is what actually
+      // confirms the pairing (1st-Sg vs. 3rd-Pl), not just that both values
+      // were selected somewhere (2026-09-16, replacing the old
+      // per-dimension membership check that couldn't tell a valid pairing
+      // from an invalid cross-pairing).
+      var rows=c.rows.slice(),usedRow=rows.map(function(){return false;}),matched=0;
+      st.sel.blocks.forEach(function(blk){
+        for(var i=0;i<rows.length;i++){
+          if(usedRow[i]) continue;
+          if(dims.every(function(dim){return rows[i][dim.k]===blk[dim.k];})){
+            usedRow[i]=true;matched++;break;
+          }
+        }
       });
-      ok=allValid;
-      partial=!ok&&anyValid;      // some, but not every, matching slot picked
+      ok=(matched===c.rows.length);
+      partial=!ok&&matched>0;
+      chosen={blocks:st.sel.blocks.slice()};
     } else {
-      ok=anyValid;                // "any valid": one matching parse is enough
+      // "Any valid": correct if the single selection matches any one of
+      // this form's valid parses.
+      ok=c.rows.some(function(row){return dims.every(function(dim){return st.sel[dim.k]===row[dim.k];});});
+      chosen={};dims.forEach(function(dim){chosen[dim.k]=st.sel[dim.k];});
     }
-    var chosen={};dims.forEach(function(dim){chosen[dim.k]=st.sel[dim.k];});
     st.result={ok:ok,partial:partial,chosen:chosen};
     finishCheck(c,ok);
   }
@@ -1475,12 +1598,12 @@
   function advance(){
     if(st.pendingDone){st.pendingDone=false;st.done=true;render();return;}
     if(st.pos<st.queue.length-1) st.pos++;
-    st.flipped=false;st.result=null;st.peeked=false;st.sel={};newGrid();st.snap=true;render();
+    st.flipped=false;st.result=null;st.peeked=false;st.sel={};st.reviewIdx=0;newGrid();st.snap=true;render();
   }
   function go(d){
     var n=st.pos+d;
     if(n<0||n>=st.queue.length) return;
-    st.pos=n;st.flipped=false;st.result=null;st.peeked=false;st.sel={};newGrid();st.snap=true;render();
+    st.pos=n;st.flipped=false;st.result=null;st.peeked=false;st.sel={};st.reviewIdx=0;newGrid();st.snap=true;render();
   }
   function gradeReveal(ok){
     var c=st.queue[st.pos];
@@ -2050,11 +2173,68 @@
   });
   applySize();
 
+  // Custom Greek-type picker (2026-09-16): each option previews ἄνθρωπος set
+  // in that font, in a fixed-width column so every preview lines up. The
+  // hidden native <select> stays the single source of truth for st.font --
+  // picking an option here just sets its value and dispatches the same
+  // 'change' event the old visible select fired, so applyFont() and every
+  // other consumer of st.font/save() keep working unmodified.
+  var FONTS=[
+    ["gentium","Gentium Book Plus",'"Gentium Book Plus","Palatino Linotype",Palatino,Georgia,serif'],
+    ["cardo","Cardo",'"Cardo","Gentium Book Plus",Georgia,serif'],
+    ["didot","GFS Didot",'"GFS Didot","Gentium Book Plus",Georgia,serif'],
+    ["neohellenic","GFS Neohellenic",'"GFS Neohellenic","Gentium Book Plus",Georgia,serif'],
+    ["noto","Noto Sans",'"Noto Sans","Gentium Book Plus",Georgia,serif'],
+    ["garamond","EB Garamond",'"EB Garamond","Gentium Book Plus",Georgia,serif'],
+    ["notoserif","Noto Serif",'"Noto Serif","Gentium Book Plus",Georgia,serif'],
+    ["oldstandard","Old Standard TT",'"Old Standard TT","Gentium Book Plus",Georgia,serif'],
+    ["alegreya","Alegreya Sans",'"Alegreya Sans","Gentium Book Plus",Georgia,serif'],
+    ["arimo","Arimo",'"Arimo","Gentium Book Plus",Georgia,serif']
+  ];
+  function buildFontPicker(){
+    var list=el("fontPickerList");
+    list.innerHTML="";
+    FONTS.forEach(function(f){
+      var b=document.createElement("button");
+      b.type="button";b.className="fontopt";b.setAttribute("role","option");
+      b.setAttribute("data-val",f[0]);
+      b.innerHTML='<span class="grk" style="font-family:'+f[2]+'">ἄνθρωπος</span><span>'+f[1]+'</span>';
+      b.addEventListener("click",function(){
+        el("fontSelect").value=f[0];
+        el("fontSelect").dispatchEvent(new Event("change",{bubbles:true}));
+        closeFontPicker();
+      });
+      list.appendChild(b);
+    });
+  }
+  function openFontPicker(){
+    el("fontPickerList").hidden=false;
+    el("fontPickerBtn").setAttribute("aria-expanded","true");
+  }
+  function closeFontPicker(){
+    el("fontPickerList").hidden=true;
+    el("fontPickerBtn").setAttribute("aria-expanded","false");
+  }
+  el("fontPickerBtn").addEventListener("click",function(e){
+    e.stopPropagation();
+    if(el("fontPickerList").hidden) openFontPicker(); else closeFontPicker();
+  });
+  document.addEventListener("click",function(e){
+    if(!el("fontPicker").contains(e.target)) closeFontPicker();
+  });
+  buildFontPicker();
+
   function applyFont(){
     // "gentium" is the default face declared on :root, so it carries no attribute
     if(st.font==="gentium") document.documentElement.removeAttribute("data-grk");
     else document.documentElement.setAttribute("data-grk",st.font);
     el("fontSelect").value=st.font;
+    var f=FONTS.filter(function(x){return x[0]===st.font;})[0]||FONTS[0];
+    el("fontPickerPreview").style.fontFamily=f[2];
+    el("fontPickerLabel").textContent=f[1];
+    Array.prototype.forEach.call(el("fontPickerList").children,function(b){
+      b.setAttribute("aria-selected",b.getAttribute("data-val")===st.font?"true":"false");
+    });
   }
   el("fontSelect").addEventListener("change",function(){
     st.font=el("fontSelect").value;save();applyFont();
@@ -2330,7 +2510,7 @@
     // reselecting this deck rebuilds a queue the normal way, picking up your
     // accumulated progress exactly as always.
     st.queue=[];st.pos=0;st.flipped=false;st.result=null;st.peeked=false;
-    st.got=0;st.missed=0;st.sel={};st.started=Date.now();st.answered=0;
+    st.got=0;st.missed=0;st.sel={};st.reviewIdx=0;st.started=Date.now();st.answered=0;
     st.done=false;st.pendingDone=false;st.missedList=[];
     newGrid();st.snap=true;
 
@@ -2393,7 +2573,7 @@
     var k=wordKey(c);
     st.queue=st.queue.filter(function(x){return !(isVocab(x)&&wordKey(x)===k);});
     if(st.pos>=st.queue.length) st.pos=Math.max(0,st.queue.length-1);
-    st.flipped=false;st.result=null;st.peeked=false;st.sel={};newGrid();st.snap=true;render();
+    st.flipped=false;st.result=null;st.peeked=false;st.sel={};st.reviewIdx=0;newGrid();st.snap=true;render();
   });
 
   var armed=false;
