@@ -197,13 +197,10 @@
     font-size:calc(30px * var(--ts));color:var(--ink)}
   .parse-ex{text-align:center;font-size:calc(14px * var(--ts));color:var(--ink-3);margin:-2px 0 4px}
   .parse-ex .grk{font-family:var(--grk);font-size:calc(17px * var(--ts));color:var(--ink-2)}
-  .parse-line{display:flex;align-items:center;gap:10px;font-size:calc(clamp(16px,3vw,21px) * var(--ts))}
-  .parse-line .grk{font-family:var(--grk)}
   /* a paradigm's Greek short form, wherever it appears in a dt/dd slip --
      front prompt or the Parse -> Form answer side's own paradigm row --
      renders in the Greek face, not the English one (2026-09-10) */
   .slip dd.grk{font-family:var(--grk)}
-  .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--ink-3)}
   /* compact badge chips -- one grouped pill per valid parse, doubling as the
      single-parse review switcher (2026-09-16). */
   .badges{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:2px 0}
@@ -351,6 +348,12 @@
   /* sits alone inside the already-boxed .filters slot, not stacked with
      siblings — skip the generic details top-border rather than double it */
   details.filtblock{border-top:0;padding-top:0}
+  /* the font guide, toggled open directly under "What's the difference?"
+     inside Settings rather than as its own separate top-level accordion --
+     same "already boxed, skip the double border" treatment as .filtblock,
+     plus width:100% so it breaks onto its own line below the Greek-type
+     row instead of squeezing into the flex-wrap beside it (2026-09-20) */
+  details.fontguide-inline{border-top:0;padding-top:0;width:100%}
   .filtbody{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin-top:10px}
   /* body content of the top-level panels reads as belonging to the
      summary above it \u2014 same indent depth as the nested sections,
@@ -467,6 +470,23 @@
       </select>
       <button type="button" class="btn" id="fontGuideLink" style="margin-left:8px">What&rsquo;s the difference?</button>
     </div>
+    <details id="fontGuidePanel" class="fontguide-inline">
+      <summary><span class="label">Greek type &mdash; font guide</span></summary>
+      <div class="terms">
+        <dl>
+          <dt>Gentium Book Plus <span class="hint">(default)</span><br><span style="font-family:'Gentium Book Plus',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Warm, humanist serif built by SIL specifically for multilingual biblical and scholarly text. The most reliable choice for reading long stretches of running Greek comfortably.</dd>
+          <dt>Cardo<br><span style="font-family:'Cardo',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Scholarly serif modeled on Bembo-era types, a common choice for critical editions. A touch more classical and upright than Gentium.</dd>
+          <dt>GFS Didot<br><span style="font-family:'GFS Didot',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Elegant, high-contrast Greek revival face from the Greek Font Society. Striking for headings and large display text; the fine strokes get harder to read at small drill sizes.</dd>
+          <dt>GFS Neohellenic<br><span style="font-family:'GFS Neohellenic',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Clean, modern humanist face from the Greek Font Society. Very legible at small sizes &mdash; a solid everyday alternative to Gentium.</dd>
+          <dt>Noto Sans<br><span style="font-family:'Noto Sans',sans-serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Google's universal sans-serif, built to guarantee full accent and breathing-mark coverage. Plain and neutral if you'd rather drill in a sans-serif face.</dd>
+          <dt>EB Garamond<br><span style="font-family:'EB Garamond',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Hand-cut-inspired classical serif, alongside Cardo and Gentium one of the most common choices for printed biblical Greek. Slightly warmer and more calligraphic than either.</dd>
+          <dt>Noto Serif<br><span style="font-family:'Noto Serif',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Serif sibling of Noto Sans, with the same guaranteed-complete Unicode coverage. The safest fallback if a specialty face ever mis-renders a glyph.</dd>
+          <dt>Old Standard TT<br><span style="font-family:'Old Standard TT',Georgia,serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Modeled on the Teubner-style types scholars use for printed critical editions of Greek texts. A distinct, old-scholarly look.</dd>
+          <dt>Alegreya Sans<br><span style="font-family:'Alegreya Sans',sans-serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Modern, calligraphic-leaning sans-serif designed for comfortable extended reading &mdash; softer than Noto Sans or Arimo.</dd>
+          <dt>Arimo<br><span style="font-family:'Arimo',sans-serif;font-size:1.25em">ἄνθρωπος</span></dt><dd>Plain Arial-workalike sans-serif. Utilitarian, with no stylistic flourish &mdash; maximizes legibility for pure drilling.</dd>
+        </dl>
+      </div>
+    </details>
     <div class="group">
       <span class="label">Word highlight</span>
       <div class="seg" role="group" aria-label="Highlight style for the target word in a sentence">
@@ -529,24 +549,6 @@
   <div class="boxes" id="boxes"></div>
   </details>
 
-  <details id="fontGuidePanel">
-    <summary><span class="label">Greek type &mdash; font guide</span></summary>
-    <div class="terms">
-      <dl>
-        <dt>Gentium Book Plus <span class="hint">(default)</span></dt><dd>Warm, humanist serif built by SIL specifically for multilingual biblical and scholarly text. The most reliable choice for reading long stretches of running Greek comfortably.<span style="font-family:'Gentium Book Plus',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Cardo</dt><dd>Scholarly serif modeled on Bembo-era types, a common choice for critical editions. A touch more classical and upright than Gentium.<span style="font-family:'Cardo',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>GFS Didot</dt><dd>Elegant, high-contrast Greek revival face from the Greek Font Society. Striking for headings and large display text; the fine strokes get harder to read at small drill sizes.<span style="font-family:'GFS Didot',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>GFS Neohellenic</dt><dd>Clean, modern humanist face from the Greek Font Society. Very legible at small sizes &mdash; a solid everyday alternative to Gentium.<span style="font-family:'GFS Neohellenic',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Noto Sans</dt><dd>Google's universal sans-serif, built to guarantee full accent and breathing-mark coverage. Plain and neutral if you'd rather drill in a sans-serif face.<span style="font-family:'Noto Sans',sans-serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>EB Garamond</dt><dd>Hand-cut-inspired classical serif, alongside Cardo and Gentium one of the most common choices for printed biblical Greek. Slightly warmer and more calligraphic than either.<span style="font-family:'EB Garamond',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Noto Serif</dt><dd>Serif sibling of Noto Sans, with the same guaranteed-complete Unicode coverage. The safest fallback if a specialty face ever mis-renders a glyph.<span style="font-family:'Noto Serif',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Old Standard TT</dt><dd>Modeled on the Teubner-style types scholars use for printed critical editions of Greek texts. A distinct, old-scholarly look.<span style="font-family:'Old Standard TT',Georgia,serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Alegreya Sans</dt><dd>Modern, calligraphic-leaning sans-serif designed for comfortable extended reading &mdash; softer than Noto Sans or Arimo.<span style="font-family:'Alegreya Sans',sans-serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-        <dt>Arimo</dt><dd>Plain Arial-workalike sans-serif. Utilitarian, with no stylistic flourish &mdash; maximizes legibility for pure drilling.<span style="font-family:'Arimo',sans-serif;font-size:1.25em;margin-left:8px">ἄνθρωπος</span></dd>
-      </dl>
-    </div>
-  </details>
-
   <details>
     <summary><span class="label">Charts &amp; Vocabulary</span></summary>
     <div class="tables" id="refHost"></div>
@@ -587,6 +589,14 @@
           κράζ-ο-μεν has one; δίδο-μεν does not, which is why μι verbs look different.</dd>
         <dt>Stem</dt><dd>What is left of a word once you take the ending off. The aorist often uses a
           different stem from the present, and that is the part you simply memorise.</dd>
+        <dt>Luo, Elusa, Efagon, Eluon…</dt><dd>Biblingo's own names for the verb forms, based on shape
+          rather than meaning (from lesson 15.1 on). Traditional labels mislead — “imperfect” implies a
+          contrast with “perfect,” when its real counterpart is the aorist — so each form is instead named
+          after λύω, the verb every Greek grammar uses for paradigms, spelled in English letters to keep it
+          distinct from actual Greek: <em>Luo</em> = present, <em>Luso</em> = future, <em>Elusa</em> =
+          1st/sigmatic aorist, <em>Efagon</em> = 2nd/thematic aorist (named for ἔφαγον “ate” — kept separate
+          from Elusa since the two aorists share a meaning but not a shape), <em>Eluon</em> = imperfect.
+          “Aorist” still covers Elusa and Efagon together, since it has no competing meaning in English.</dd>
         <dt>Enclitic</dt><dd>A small word with no accent of its own that leans back on the word before
           it: με, μου, μοι, σε, σου, σοι.</dd>
         <dt>Proclitic</dt><dd>The same idea leaning forward, onto the word after it: ὁ, ἡ, οἱ, αἱ.</dd>
@@ -979,12 +989,42 @@
     });
   }
 
+  // Caps how many of a single paradigm's (deck's) due cards enter today's
+  // Due-now session, so a paradigm that just had a pile go due at once (a
+  // new lesson, or a few days away) doesn't flood the queue (John's
+  // request, 2026-09-20: 20/paradigm/day, oldest-due-first, overflow to
+  // the next day). The longest-overdue cards within each deck are admitted
+  // first (a never-seen card, p===null, counts as due since forever, so it
+  // sorts first); whatever doesn't fit stays due and simply leads next time
+  // a Due-now session is built -- no separate day-bucket bookkeeping is
+  // needed, since bump() pushes an answered card's due date into the
+  // future, freeing its slot for the next-oldest once it's done. Full deck
+  // sessions are never capped -- see build() below, only its "due" branch
+  // calls this.
+  var DAILY_DUE_CAP=20;
+  function capDuePerParadigm(cards){
+    var byDeck={};
+    cards.forEach(function(c){
+      var k=c.deck.id;(byDeck[k]=byDeck[k]||[]).push(c);
+    });
+    var keep=[];
+    Object.keys(byDeck).forEach(function(k){
+      var list=byDeck[k];
+      list.sort(function(a,b){
+        var pa=rec(a.id),pb=rec(b.id);
+        return (pa?pa.due:-1)-(pb?pb.due:-1);
+      });
+      keep=keep.concat(list.slice(0,DAILY_DUE_CAP));
+    });
+    return keep;
+  }
   function build(){
     rollNouns();
     rollVerbs();
     var p=pool(),now=Date.now(),d;
     if(st.session==="due"){
       d=p.filter(function(c){return isDue(c,now);});
+      d=capDuePerParadigm(d);
       d.sort(function(a,b){
         var pa=rec(a.id),pb=rec(b.id);
         return (pa?pa.box:1.5)-(pb?pb.box:1.5)||Math.random()-0.5;
@@ -1282,10 +1322,6 @@
       // (2026-09-16).
       var activeRow=c.rows[st.reviewIdx]||c.rows[0];
       var showEx=!!activeRow.ex;
-      var activeChip=varying.map(function(dim){
-        var lbl=shortOf(activeRow[dim.k],c.deck);
-        return '<span class="pbadge'+grkCls(lbl)+'">'+lbl+'</span>';
-      }).join("");
       back.innerHTML=top(dn,
           res?'<span class="verdict '+verdictCls+'">'+verdictIcon+'</span>'
              :(multiRow?c.rows.length+" parsings":"1 parsing"),
@@ -1294,7 +1330,6 @@
         (sharedText?'<p class="parseline">'+sharedText+'</p>':"")+
         groupRow+
         '<div class="parse-list">'+
-          (activeChip?'<div class="parse-line"><span class="dot"></span>'+activeChip+'</div>':"")+
           (showEx?'<div class="parse-ex"><span class="grk">'+hlWord(activeRow.ex,activeRow.form)+'</span></div>'+
             '<div class="hint" style="margin:-2px 0 4px">'+activeRow.exEn+'</div>':"")+
         '</div>'+corr2+'</div>'+backNotes(c,activeRow)+
@@ -1672,6 +1707,17 @@
   }
 
   var filtOpen={};
+  // The seven verb-tense decks below (vpres/vfut/vaor2/vaor1/vimpf/vmi/vmp)
+  // already pick one verb via the "Verbs" dropdown in Settings, which sets
+  // this same "pd" filter (see renderVerbSets()) -- so the chip row this
+  // function would otherwise draw for that dim is a second, redundant way
+  // to do the exact same thing (John's request, 2026-09-20: "get rid of
+  // it" -- confirmed to apply to every verb form, not just aorist thematic).
+  // Hidden here, not removed from the deck's own dims -- defaultFilters(),
+  // passesFilter() and the dropdown itself all still read this dim. vinf's
+  // own "Verb" dim (take/hear) is untouched: it has no Settings dropdown
+  // counterpart, so its chips are the only way to pick between the two.
+  var VERB_DROPDOWN_DECKS=["vpres","vmp","vfut","vaor2","vaor1","vimpf","vmi"];
   function renderFilters(){
     var host=el("filters");host.innerHTML="";
     var d=singleDeck();
@@ -1697,6 +1743,7 @@
     var row=document.createElement("div");row.className="filtbody";body.appendChild(row);
     var f=st.filters[d.id];
     d.dims.forEach(function(dim){
+      if(dim.label==="Verb"&&VERB_DROPDOWN_DECKS.indexOf(d.id)>-1) return;
       var g=document.createElement("div");g.className="group";
       var l=document.createElement("span");l.className="label";l.textContent=dim.label;
       g.appendChild(l);
@@ -2158,10 +2205,14 @@
     st.font=el("fontSelect").value;save();applyFont();
   });
   applyFont();
+  // Toggles open/closed, since the panel now sits right below this button
+  // inside Settings rather than far down the page -- no more need to force
+  // it open and scroll to it. The panel's own summary ("Greek type — font
+  // guide") toggles the same "open" attribute natively, so clicking either
+  // this button or that summary opens or closes the same panel (John's
+  // request, 2026-09-20).
   el("fontGuideLink").addEventListener("click",function(){
-    var p=el("fontGuidePanel");
-    p.open=true;
-    p.scrollIntoView({behavior:"smooth",block:"start"});
+    el("fontGuidePanel").open=!el("fontGuidePanel").open;
   });
 
   seg("modeParse","modeForm","mode","parse","form");
