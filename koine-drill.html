@@ -1820,18 +1820,30 @@
   // vocab-chapter table under Charts & Vocabulary AND the Archived words
   // panel (2026-09-21, John's request). Lets him cover either side (Greek
   // form or English meaning) and self-test off the chart or the archive.
-  // Shared, in-memory-only state, like refOpen/refGroupOpen above -- always
-  // starts back off on a fresh load -- but the CONTROL itself is rendered
-  // repeatedly, directly above the columns in each innermost section (see
-  // hideToggleRow() just below), same placement pattern as the per-deck
-  // "Show verb" dropdowns rather than one copy up at the top of the panel.
-  var refHideWord=false, refHideGloss=false;
-  // One small chip pair, built fresh everywhere it's needed (each vocab
-  // chapter's table, each archived chapter-range list) rather than a single
-  // shared DOM node -- clicking any copy flips the same refHideWord/
-  // refHideGloss flags and repaints both renderRef() and renderArchived(),
-  // so every other copy of the row updates in lockstep.
-  function hideToggleRow(){
+  // Two COMPLETELY SEPARATE sets of state, not one shared pair (2026-09-21,
+  // third pass -- John's explicit correction: the Archived panel's hide/peek
+  // state must not follow the chart's, since the whole point of hiding a
+  // word there is a stand-alone requiz -- "does this one still need to stay
+  // archived?" -- independent of whatever the chart happens to be showing).
+  // refHide*/refWordShown/refGlossShown belong to the vocab-chapter tables
+  // (renderRef); archHide*/archWordShown/archGlossShown belong to the
+  // Archived words panel (renderArchived) -- same shape, never shared, never
+  // cross-cleared. In-memory only, like refOpen/refGroupOpen above -- always
+  // starts back off on a fresh load. The per-row maps (refWordShown etc.)
+  // are exceptions to their OWN column-wide hide state, keyed like
+  // st.archived (deckId+"|w|"+form) purely for a stable per-word id -- not
+  // because the two panels share anything. Wiped whenever their own
+  // column-head chip is clicked (see hideToggleRow below) -- the header
+  // always wins and snaps its whole column back to one uniform state,
+  // discarding any per-row peeks made under the old state.
+  var refHideWord=false, refHideGloss=false, refWordShown={}, refGlossShown={};
+  var archHideWord=false, archHideGloss=false, archWordShown={}, archGlossShown={};
+  // Built fresh everywhere it's needed (each vocab chapter's table, each
+  // archived chapter-range list) -- takes the getters/setters for whichever
+  // pair of column states it's controlling THIS time, so a copy built for
+  // the chart never touches the archive's state and vice versa, and each
+  // only repaints its own panel, not both.
+  function hideToggleRow(getW,setW,getG,setG,repaint){
     var row=document.createElement("div");
     row.className="group";row.style.margin="0 0 8px";
     function mk(label,get,set){
@@ -1840,12 +1852,12 @@
       b.setAttribute("aria-pressed",get()?"true":"false");
       b.addEventListener("click",function(){
         set(!get());
-        renderRef();renderArchived();
+        repaint();
       });
       return b;
     }
-    row.appendChild(mk("Hide Word",function(){return refHideWord;},function(v){refHideWord=v;}));
-    row.appendChild(mk("Hide Meaning",function(){return refHideGloss;},function(v){refHideGloss=v;}));
+    row.appendChild(mk("Hide Word",getW,setW));
+    row.appendChild(mk("Hide Meaning",getG,setG));
     return row;
   }
   // vpres/vfut/vaor2/vaor1/vimpf converted from rotating 3-verb pools to full
@@ -1902,35 +1914,69 @@
         note.innerHTML="<strong>"+refLabel(d)+"</strong> · "+d.lemma+" — "+d.note;
         dhost.appendChild(note);
         if(d.kind==="vocab"){                        // a word list, not a paradigm grid
-          dhost.appendChild(hideToggleRow());
+          dhost.appendChild(hideToggleRow(
+            function(){return refHideWord;},function(v){refHideWord=v;refWordShown={};},
+            function(){return refHideGloss;},function(v){refHideGloss=v;refGlossShown={};},
+            renderRef));
           var vw=document.createElement("div");vw.className="tw";
+          // both columns always exist now, even hidden -- a hidden column
+          // still shows a "Show" chip per row rather than disappearing
+          // outright, so its header stays too (2026-09-21, second pass)
           var vh='<table><caption>'+refLabel(d)+' — '+d.rows.length+' words</caption><thead><tr>'+
-            '<th>Archive</th>'+(refHideWord?'':'<th>Word</th>')+(refHideGloss?'':'<th>Meaning</th>')+'<th>Lesson</th></tr></thead><tbody>';
+            '<th>Archive</th><th>Word</th><th>Meaning</th><th>Lesson</th></tr></thead><tbody>';
+          // With a column hidden, John can still peek at one row at a time --
+          // a small reveal chip stands in for the cell instead of the plain
+          // text (2026-09-21, second pass). wordShown/glossShown fold the
+          // column-wide state and the per-row exception into one flag: true
+          // whenever the column isn't hidden at all, or it is but this one
+          // row has been individually revealed. wordPeekRows/glossPeekRows
+          // collect the rows that got a clickable chip (only when their
+          // column is hidden), in the same order they were appended to the
+          // HTML string, so they can be zipped against the matching buttons
+          // once the markup exists in the DOM (same pattern as .archbtn below).
+          var wordPeekRows=[], glossPeekRows=[];
           d.rows.forEach(function(x){
-            var archived=!!st.archived[d.id+"|w|"+x.form];
+            var key=d.id+"|w|"+x.form;
+            var archived=!!st.archived[key];
+            var wordShown=!refHideWord||!!refWordShown[key];
+            var glossShown=!refHideGloss||!!refGlossShown[key];
             // the "(archived)" note rides on the first visible cell among Word /
             // Meaning / Lesson, so it stays legible whichever columns are
-            // currently hidden (2026-09-21)
-            var noteOnWord=archived&&!refHideWord;
-            var noteOnGloss=archived&&refHideWord&&!refHideGloss;
-            var noteOnLesson=archived&&refHideWord&&refHideGloss;
+            // currently hidden or peeked (2026-09-21)
+            var noteOnWord=archived&&wordShown;
+            var noteOnGloss=archived&&!wordShown&&glossShown;
+            var noteOnLesson=archived&&!wordShown&&!glossShown;
             vh+='<tr'+(archived?' class="archived-row"':'')+'>'+
               '<td class="archtoggle"><button type="button" class="archbtn" aria-pressed="'+
-                (archived?"true":"false")+'">'+(archived?"Restore":"Archive")+'</button></td>'+
-              (refHideWord?'':'<td style="font-size:calc(19px * var(--ts))">'+x.form+
-                (noteOnWord?' <span class="hint">(archived)</span>':'')+'</td>')+
-              (refHideGloss?'':'<td style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
-                (noteOnGloss?' <span class="hint">(archived)</span>':'')+'</td>')+
-              '<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
+                (archived?"true":"false")+'">'+(archived?"Restore":"Archive")+'</button></td>';
+            if(!refHideWord){
+              vh+='<td style="font-size:calc(19px * var(--ts))">'+x.form+
+                (noteOnWord?' <span class="hint">(archived)</span>':'')+'</td>';
+            }else{
+              vh+='<td><button type="button" class="chip peekbtn-word" style="font-family:var(--grk);'+
+                'font-size:calc(16px * var(--ts))">'+(wordShown?x.form:"Show")+'</button>'+
+                (noteOnWord?' <span class="hint">(archived)</span>':'')+'</td>';
+              wordPeekRows.push(x);
+            }
+            if(!refHideGloss){
+              vh+='<td style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
+                (noteOnGloss?' <span class="hint">(archived)</span>':'')+'</td>';
+            }else{
+              vh+='<td><button type="button" class="chip peekbtn-gloss" style="font-family:var(--eng);'+
+                'font-size:calc(13px * var(--ts))">'+(glossShown?x.gloss:"Show")+'</button>'+
+                (noteOnGloss?' <span class="hint">(archived)</span>':'')+'</td>';
+              glossPeekRows.push(x);
+            }
+            vh+='<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
                 x.cat+' · '+x.lesson+(noteOnLesson?' <span class="hint">(archived)</span>':'')+'</td></tr>';
           });
           vh+='</tbody></table>';
           vw.innerHTML=vh;
-          // wire the per-row toggle now the markup exists in the DOM. Button
-          // order matches d.rows order exactly (same forEach, same list), so
-          // zipping by index is safe and needs no per-row key baked into the
-          // HTML string -- which would have to survive attribute-quoting for
-          // every accented Greek form otherwise.
+          // wire the per-row toggles now the markup exists in the DOM. Button
+          // order matches the corresponding rows array exactly (same forEach,
+          // same push order), so zipping by index is safe and needs no
+          // per-row key baked into the HTML string -- which would have to
+          // survive attribute-quoting for every accented Greek form otherwise.
           var abtns=vw.querySelectorAll(".archbtn");
           d.rows.forEach(function(x,i){
             var key=d.id+"|w|"+x.form;
@@ -1944,6 +1990,22 @@
               // session" in the build notes) -- then repaint this table so
               // the button label and row dimming reflect the new state
               build();renderRef();
+            });
+          });
+          var wbtns=vw.querySelectorAll(".peekbtn-word");
+          wordPeekRows.forEach(function(x,i){
+            var key=d.id+"|w|"+x.form;
+            wbtns[i].addEventListener("click",function(){
+              refWordShown[key]=!refWordShown[key];
+              renderRef();
+            });
+          });
+          var gbtns=vw.querySelectorAll(".peekbtn-gloss");
+          glossPeekRows.forEach(function(x,i){
+            var key=d.id+"|w|"+x.form;
+            gbtns[i].addEventListener("click",function(){
+              refGlossShown[key]=!refGlossShown[key];
+              renderRef();
             });
           });
           dhost.appendChild(vw);
@@ -2135,24 +2197,44 @@
     keys.sort();
     // stored value is always "form — gloss" (set in renderRef()'s archive
     // button and in the drill-view archive button, both using the same " — "
-    // separator) -- split it so Word and Meaning can be hidden independently,
-    // same as the vocab-chapter tables (2026-09-21).
+    // separator) -- split it so Word and Meaning can be hidden independently
+    // (2026-09-21). This panel's hide/peek state (archHideWord etc.) is its
+    // OWN, never the chart's -- see the comment above refHideWord/archHideWord
+    // near hideToggleRow's definition (John's correction, third pass: hiding
+    // a word here is a stand-alone requiz to decide whether it still belongs
+    // archived, and must not be coupled to whatever the chart is showing).
     var ARCH_SEP=" — ";
+    function cellNode(text,hidden,shown,onToggle,grk){
+      if(!hidden){
+        var s=document.createElement("span");
+        if(grk) s.style.fontFamily="var(--grk)";
+        s.textContent=text;
+        return s;
+      }
+      var b=document.createElement("button");
+      b.type="button";b.className="chip";
+      if(grk) b.style.fontFamily="var(--grk)";
+      b.style.fontSize="calc(13px * var(--ts))";
+      b.textContent=shown?text:"Show";
+      b.addEventListener("click",function(){onToggle();renderArchived();});
+      return b;
+    }
     function entry(k){
       var li=document.createElement("li");
       var full=st.archived[k], idx=full.indexOf(ARCH_SEP);
       var form=idx>=0?full.slice(0,idx):full,
           gloss=idx>=0?full.slice(idx+ARCH_SEP.length):"";
-      var shown=[];
-      if(!refHideWord) shown.push(form);
-      if(!refHideGloss && gloss) shown.push(gloss);
-      var span=document.createElement("span");
-      if(shown.length){
-        span.textContent=shown.join(ARCH_SEP);
-      }else{
-        span.className="hint";span.textContent="(hidden)";
+      var wrap=document.createElement("span");
+      wrap.style.display="flex";wrap.style.gap="6px";wrap.style.alignItems="baseline";wrap.style.flexWrap="wrap";
+      wrap.appendChild(cellNode(form,archHideWord,!!archWordShown[k],
+        function(){archWordShown[k]=!archWordShown[k];},true));
+      if(gloss){
+        var sep=document.createElement("span");sep.className="hint";sep.textContent=ARCH_SEP;
+        wrap.appendChild(sep);
+        wrap.appendChild(cellNode(gloss,archHideGloss,!!archGlossShown[k],
+          function(){archGlossShown[k]=!archGlossShown[k];},false));
       }
-      li.appendChild(span);
+      li.appendChild(wrap);
       var b=document.createElement("button");
       b.className="btn";b.type="button";b.textContent="Restore";
       b.addEventListener("click",function(){
@@ -2171,7 +2253,10 @@
         '<span class="label">'+vr[1]+' ('+mine.length+')</span>',
         !!archOpen[vr[0]],
         (function(id){return function(v){archOpen[id]=v;};})(vr[0]));
-      sec.appendChild(hideToggleRow());
+      sec.appendChild(hideToggleRow(
+        function(){return archHideWord;},function(v){archHideWord=v;archWordShown={};},
+        function(){return archHideGloss;},function(v){archHideGloss=v;archGlossShown={};},
+        renderArchived));
       var ul=document.createElement("ul");ul.className="archived-list";
       mine.forEach(function(k){ul.appendChild(entry(k));});
       sec.appendChild(ul);body.appendChild(sec);
@@ -2180,7 +2265,10 @@
       return !VRANGES.some(function(vr){return k.indexOf(vr[0]+"|w|")===0;});
     });
     if(loose.length){
-      body.appendChild(hideToggleRow());
+      body.appendChild(hideToggleRow(
+        function(){return archHideWord;},function(v){archHideWord=v;archWordShown={};},
+        function(){return archHideGloss;},function(v){archHideGloss=v;archGlossShown={};},
+        renderArchived));
       var ul2=document.createElement("ul");ul2.className="archived-list";
       loose.forEach(function(k){ul2.appendChild(entry(k));});
       body.appendChild(ul2);
