@@ -1845,7 +1845,15 @@
   // only repaints its own panel, not both.
   function hideToggleRow(getW,setW,getG,setG,repaint){
     var row=document.createElement("div");
-    row.className="group";row.style.margin="0 0 8px";
+    // margin-bottom only -- left indent comes from the parent details'
+    // ">*:not(summary)" CSS rule (same one the note paragraph and the
+    // table/list below get), so this row lines up with them instead of
+    // sitting flush left. An inline "margin:0 0 8px" here used to zero out
+    // margin-left and pull the chip row out of alignment in BOTH the
+    // Charts & Vocabulary tables and the Archived words groups (John's
+    // report, 2026-09-21: not uniformly indented) -- fixed by only setting
+    // the one side this row actually needs to control.
+    row.className="group";row.style.marginBottom="8px";
     function mk(label,get,set){
       var b=document.createElement("button");
       b.type="button";b.className="chip";b.textContent=label;
