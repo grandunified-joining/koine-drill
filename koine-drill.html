@@ -293,6 +293,17 @@
   .tables{display:flex;flex-direction:column;gap:20px;margin-top:14px}
   .tw{overflow-x:auto}
   table{border-collapse:collapse;width:100%;min-width:400px}
+  /* the 3/4-column word tables (vocab charts + the Archived words panel)
+     opt out of the grid tables' width:100%/min-width:400px -- those exist
+     so a many-column paradigm grid (Case x Number, etc.) stays readable at
+     full container width, but stretching a 3-column Archive/Word/Meaning
+     row to the same width just pads empty space between short cells,
+     forcing the eye to travel further from Word to Meaning than the text
+     needs, and forcing a horizontal scroll on a phone even though the row
+     itself would easily fit (John's request, 2026-09-21, fifth pass:
+     "as close as tastefully possible... more friendly to phones"). width:auto
+     lets the row shrink-wrap to its own content instead. */
+  table.wordtable{width:auto;min-width:0}
   caption{text-align:left;font-family:var(--eng);
     letter-spacing:.06em;font-size:calc(14px * var(--ts));font-weight:600;color:var(--ink-3);padding-bottom:8px}
   th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line)}
@@ -1935,7 +1946,7 @@
           // both columns always exist now, even hidden -- a hidden column
           // still shows a "Show" chip per row rather than disappearing
           // outright, so its header stays too (2026-09-21, second pass)
-          var vh='<table><caption>'+refLabel(d)+' — '+d.rows.length+' words</caption><thead><tr>'+
+          var vh='<table class="wordtable"><caption>'+refLabel(d)+' — '+d.rows.length+' words</caption><thead><tr>'+
             '<th>Archive</th><th>Word</th><th>Meaning</th><th>Lesson</th></tr></thead><tbody>';
           // With a column hidden, John can still peek at one row at a time --
           // a small reveal chip stands in for the cell instead of the plain
@@ -2259,8 +2270,13 @@
           gloss=idx>=0?full.slice(idx+ARCH_SEP.length):"";
       var btnTd=document.createElement("td");
       btnTd.className="archtoggle";
+      // same .archbtn class + pressed state the chart's own Archive/Restore
+      // toggle uses (never the larger generic .btn) -- every word here is
+      // already archived, so it's always the "Restore" / pressed look
+      // (John's request, 2026-09-21, fifth pass: match size and format).
       var b=document.createElement("button");
-      b.className="btn";b.type="button";b.textContent="Restore";
+      b.className="archbtn";b.type="button";b.textContent="Restore";
+      b.setAttribute("aria-pressed","true");
       b.addEventListener("click",function(){
         delete st.archived[k];save();build();
       });
@@ -2287,6 +2303,7 @@
     function tableOf(keysForGroup){
       var tw=document.createElement("div");tw.className="tw";
       var table=document.createElement("table");
+      table.className="wordtable";
       var tbody=document.createElement("tbody");
       keysForGroup.forEach(function(k){tbody.appendChild(entry(k));});
       table.appendChild(tbody);tw.appendChild(table);
