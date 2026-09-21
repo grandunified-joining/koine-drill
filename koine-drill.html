@@ -183,9 +183,14 @@
   .missed{margin:0;padding-left:20px;color:var(--ink-2);display:flex;flex-direction:column;gap:4px}
   .missed li{font-size:calc(15.5px * var(--ts))}
   .archived-row td{opacity:.5}
-  .archived-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
-  .archived-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;
-    border-bottom:1px solid var(--line);padding-bottom:6px}
+  /* Archived words panel rows were a flex-wrapped <ul>/<li> list (removed
+     2026-09-21) -- Word and Meaning sat side by side in one flex span, so
+     Meaning's x-position trailed right behind whatever width THIS row's
+     Greek word happened to render at, never lining up between rows the way
+     the vocab-chart <table>s line theirs up. Now built as a real <table>
+     (see tableOf()/entry() in renderArchived) that reuses the generic
+     table/td rules above, so it gets the same auto-sized, per-group-aligned
+     Word column the charts get, for free.
   .lead{text-align:center;margin:0;color:var(--ink-3);font-size:calc(15px * var(--ts))}
   .lead .grk{font-size:calc(18px * var(--ts));color:var(--ink-2)}
   .lead-en{color:var(--ink-2)}
@@ -2227,29 +2232,65 @@
       b.addEventListener("click",function(){onToggle();renderArchived();});
       return b;
     }
+    // A row is a real <tr>, not a flex-wrapped <li> (pre-2026-09-21 fix) --
+    // Word and Meaning were siblings in one flex span there, so Meaning's
+    // x-position trailed right behind however wide THIS row's Greek word
+    // happened to render, and never lined up between rows or with the fixed
+    // table columns the vocab charts use for the same two fields (John's
+    // report, 2026-09-21, with a marked-up screenshot: the ragged second
+    // column). A <table> auto-sizes its Word <td> column to the widest word
+    // in THIS group and holds every row to that width, exactly like each
+    // vocab-chapter table already does -- so Meaning starts at one shared x
+    // per group instead of one x per row.
+    // Column order matches the vocab chart's row exactly: toggle button
+    // first, then Word, then Meaning (2026-09-21, fourth pass). It used to
+    // put Restore LAST, so with no leading column here the way the chart has
+    // one (its .archtoggle Archive button), Word started flush left instead
+    // of at the same x the chart's Word column starts at -- so Meaning
+    // landed indented less than it does in Charts & Vocabulary, even though
+    // both already shared the same generic table/td CSS (John's report,
+    // 2026-09-21, fourth pass). Putting the button first here too gives both
+    // panels the identical column layout, so Meaning lines up the same way
+    // in both.
     function entry(k){
-      var li=document.createElement("li");
+      var tr=document.createElement("tr");
       var full=st.archived[k], idx=full.indexOf(ARCH_SEP);
       var form=idx>=0?full.slice(0,idx):full,
           gloss=idx>=0?full.slice(idx+ARCH_SEP.length):"";
-      var wrap=document.createElement("span");
-      wrap.style.display="flex";wrap.style.gap="6px";wrap.style.alignItems="baseline";wrap.style.flexWrap="wrap";
-      wrap.appendChild(cellNode(form,archHideWord,!!archWordShown[k],
-        function(){archWordShown[k]=!archWordShown[k];},true));
-      if(gloss){
-        var sep=document.createElement("span");sep.className="hint";sep.textContent=ARCH_SEP;
-        wrap.appendChild(sep);
-        wrap.appendChild(cellNode(gloss,archHideGloss,!!archGlossShown[k],
-          function(){archGlossShown[k]=!archGlossShown[k];},false));
-      }
-      li.appendChild(wrap);
+      var btnTd=document.createElement("td");
+      btnTd.className="archtoggle";
       var b=document.createElement("button");
       b.className="btn";b.type="button";b.textContent="Restore";
       b.addEventListener("click",function(){
         delete st.archived[k];save();build();
       });
-      li.appendChild(b);
-      return li;
+      btnTd.appendChild(b);
+      tr.appendChild(btnTd);
+      var wordTd=document.createElement("td");
+      wordTd.style.fontSize="calc(19px * var(--ts))";
+      wordTd.appendChild(cellNode(form,archHideWord,!!archWordShown[k],
+        function(){archWordShown[k]=!archWordShown[k];},true));
+      tr.appendChild(wordTd);
+      var meaningTd=document.createElement("td");
+      meaningTd.style.fontFamily="var(--eng)";meaningTd.style.fontSize="calc(15px * var(--ts))";
+      if(gloss){
+        meaningTd.appendChild(cellNode(gloss,archHideGloss,!!archGlossShown[k],
+          function(){archGlossShown[k]=!archGlossShown[k];},false));
+      }
+      tr.appendChild(meaningTd);
+      return tr;
+    }
+    // wraps a group's <tbody> in the same .tw/table shell the vocab charts
+    // use, so it inherits the identical border, padding and column-sizing
+    // rules (see the generic "table{...}"/"td{...}" CSS) rather than a
+    // second, slightly-different set of archived-list-only rules.
+    function tableOf(keysForGroup){
+      var tw=document.createElement("div");tw.className="tw";
+      var table=document.createElement("table");
+      var tbody=document.createElement("tbody");
+      keysForGroup.forEach(function(k){tbody.appendChild(entry(k));});
+      table.appendChild(tbody);tw.appendChild(table);
+      return tw;
     }
     // an archive key carries the vocabulary deck it came from, so the four
     // chapter ranges cost nothing to split out. A range with nothing in it
@@ -2265,9 +2306,7 @@
         function(){return archHideWord;},function(v){archHideWord=v;archWordShown={};},
         function(){return archHideGloss;},function(v){archHideGloss=v;archGlossShown={};},
         renderArchived));
-      var ul=document.createElement("ul");ul.className="archived-list";
-      mine.forEach(function(k){ul.appendChild(entry(k));});
-      sec.appendChild(ul);body.appendChild(sec);
+      sec.appendChild(tableOf(mine));body.appendChild(sec);
     });
     var loose=keys.filter(function(k){
       return !VRANGES.some(function(vr){return k.indexOf(vr[0]+"|w|")===0;});
@@ -2277,9 +2316,7 @@
         function(){return archHideWord;},function(v){archHideWord=v;archWordShown={};},
         function(){return archHideGloss;},function(v){archHideGloss=v;archGlossShown={};},
         renderArchived));
-      var ul2=document.createElement("ul");ul2.className="archived-list";
-      loose.forEach(function(k){ul2.appendChild(entry(k));});
-      body.appendChild(ul2);
+      body.appendChild(tableOf(loose));
     }
   }
 
