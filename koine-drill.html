@@ -1924,7 +1924,15 @@
     GROUPS.forEach(function(g){
       var groupDecks=DECKS.filter(function(d){return d.group===g.id;});
       if(!groupDecks.length) return;
-      var gwrap=foldable("grp",'<span class="label">'+g.name+'</span>',
+      // total word count next to "Vocabulary", same "(N)" format as
+      // "Archived words (N)" (John's request, 2026-09-21, seventh pass) --
+      // only the vocab group has a flat word count that means anything;
+      // the paradigm groups' decks each cover a different grid, so there's
+      // no single number worth putting next to THEIR name.
+      var vocabCount=(g.id==="vocab")
+        ?groupDecks.reduce(function(n,d){return n+d.rows.length;},0):0;
+      var gwrap=foldable("grp",'<span class="label">'+g.name+
+          (g.id==="vocab"?' ('+vocabCount+')':'')+'</span>',
         !!refGroupOpen[g.id],
         function(v){refGroupOpen[g.id]=v;});
       host.appendChild(gwrap);
