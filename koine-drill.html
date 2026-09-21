@@ -1816,6 +1816,12 @@
   }
 
   var refOpen={}, refGroupOpen={}, refMiPd="all", refVmpPd="all";   // as with the deck groups, the reader's choice sticks -- refMiPd is the μι Verbs reference-panel filter (2026-09-15)
+  // Hide-meanings toggle for the vocab-chapter tables under Charts &
+  // Vocabulary (2026-09-21, John's request): lets him self-test straight off
+  // the chart -- Word and Lesson stay visible, the Meaning column drops out
+  // of every vocab-chapter table until switched back. In-memory only, like
+  // refOpen/refGroupOpen above -- always starts back off on a fresh load.
+  var refHideGloss=false;
   // vpres/vfut/vaor2/vaor1/vimpf converted from rotating 3-verb pools to full
   // side-by-side rosters 2026-09-16 (John's request: every learned verb
   // through lesson 16, visible at once, same pattern as vmi/vmp). Rather than
@@ -1847,6 +1853,22 @@
       '<span class="key heat-mid">shaky (50–79%)</span> '+
       '<span class="key heat-bad">weak (under 50%)</span> · untinted means not yet drilled.';
     host.appendChild(legend);
+    // Single toggle, above every vocab-chapter table rather than one copy per
+    // chapter -- applies to all of them at once. Word and Lesson stay put;
+    // only the Meaning (English gloss) column drops out, so John can quiz
+    // himself off the Greek alone and flip it back to check (2026-09-21).
+    var glossToggleRow=document.createElement("div");
+    glossToggleRow.style.textAlign="left";
+    var glossToggle=document.createElement("button");
+    glossToggle.type="button";glossToggle.className="chip";
+    glossToggle.textContent="Hide meanings";
+    glossToggle.setAttribute("aria-pressed",refHideGloss?"true":"false");
+    glossToggle.addEventListener("click",function(){
+      refHideGloss=!refHideGloss;
+      renderRef();
+    });
+    glossToggleRow.appendChild(glossToggle);
+    host.appendChild(glossToggleRow);
     // grouped exactly like the deck rail (Article & pronouns / Nouns & adjectives /
     // Verbs / Function words / Vocabulary) so this reads as one organized cheat
     // sheet rather than 26 charts in a row — and every deck is always here,
@@ -1872,15 +1894,19 @@
         if(d.kind==="vocab"){                        // a word list, not a paradigm grid
           var vw=document.createElement("div");vw.className="tw";
           var vh='<table><caption>'+refLabel(d)+' — '+d.rows.length+' words</caption><thead><tr>'+
-            '<th>Archive</th><th>Word</th><th>Meaning</th><th>Lesson</th></tr></thead><tbody>';
+            '<th>Archive</th><th>Word</th>'+(refHideGloss?'':'<th>Meaning</th>')+'<th>Lesson</th></tr></thead><tbody>';
           d.rows.forEach(function(x){
             var archived=!!st.archived[d.id+"|w|"+x.form];
+            // the "(archived)" note normally rides on the Meaning cell -- with
+            // that column hidden, pin it to Word instead so archived rows are
+            // still legible while meanings are hidden (2026-09-21)
             vh+='<tr'+(archived?' class="archived-row"':'')+'>'+
               '<td class="archtoggle"><button type="button" class="archbtn" aria-pressed="'+
                 (archived?"true":"false")+'">'+(archived?"Restore":"Archive")+'</button></td>'+
-              '<td style="font-size:calc(19px * var(--ts))">'+x.form+'</td>'+
-              '<td style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
-                (archived?' <span class="hint">(archived)</span>':'')+'</td>'+
+              '<td style="font-size:calc(19px * var(--ts))">'+x.form+
+                (archived&&refHideGloss?' <span class="hint">(archived)</span>':'')+'</td>'+
+              (refHideGloss?'':'<td style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
+                (archived?' <span class="hint">(archived)</span>':'')+'</td>')+
               '<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
                 x.cat+' · '+x.lesson+'</td></tr>';
           });
