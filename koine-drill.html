@@ -2210,14 +2210,32 @@
   var archOpen={};
   var VRANGES=[["v1","Chapters 1–4"],["v5","Chapters 5–8"],
                ["v9","Chapters 9–12"],["v13","Chapters 13–16"]];
+  // Words just restored from THIS panel -- kept visible a moment longer,
+  // with their button flipped back to "Archive", instead of vanishing the
+  // instant Restore is tapped (John's request, 2026-09-21, sixth pass: "the
+  // word should stay for you to reconsider"). Keyed like st.archived, value
+  // is the removed "form — gloss" string so the row can still render once
+  // it's gone from st.archived itself. In-memory only, like archOpen above
+  // -- cleared when the panel is closed (see the "toggle" listener below),
+  // which is the natural signal that reconsidering is over.
+  var archPendingRestore={};
   function renderArchived(){
-    var host=el("archivedPanel"), keys=Object.keys(st.archived);
+    var host=el("archivedPanel");
     if(!host) return;
+    var stKeys=Object.keys(st.archived);
+    // pending keys that haven't been re-archived since (that branch deletes
+    // them from archPendingRestore the moment it happens -- see entry()),
+    // and never a key still genuinely archived (can't be in both at once).
+    var pendKeys=Object.keys(archPendingRestore).filter(function(k){return !st.archived[k];});
+    var keys=stKeys.concat(pendKeys);
     host.hidden=!keys.length;
     if(!keys.length) return;
     var body=el("archivedList");
     body.innerHTML="";
-    el("archivedCount").textContent=keys.length;
+    // the header count is the TRUE archived count, not inflated by a word
+    // sitting here mid-reconsideration -- that one's button already says
+    // "Archive", which is its own signal.
+    el("archivedCount").textContent=stKeys.length;
     keys.sort();
     // stored value is always "form — gloss" (set in renderRef()'s archive
     // button and in the drill-view archive button, both using the same " — "
@@ -2265,20 +2283,39 @@
     // in both.
     function entry(k){
       var tr=document.createElement("tr");
-      var full=st.archived[k], idx=full.indexOf(ARCH_SEP);
+      // a word mid-reconsideration (see archPendingRestore above) is already
+      // gone from st.archived, so its "form — gloss" string only still
+      // exists in the pending map
+      var archivedNow=!!st.archived[k];
+      var full=archivedNow?st.archived[k]:archPendingRestore[k];
+      var idx=full.indexOf(ARCH_SEP);
       var form=idx>=0?full.slice(0,idx):full,
           gloss=idx>=0?full.slice(idx+ARCH_SEP.length):"";
       var btnTd=document.createElement("td");
       btnTd.className="archtoggle";
-      // same .archbtn class + pressed state the chart's own Archive/Restore
-      // toggle uses (never the larger generic .btn) -- every word here is
-      // already archived, so it's always the "Restore" / pressed look
-      // (John's request, 2026-09-21, fifth pass: match size and format).
+      // Always the .archbtn class AND always its muted/"pressed" look --
+      // lighter color, never the chart's bolder default-state look -- no
+      // matter which label this happens to be showing (John's request,
+      // 2026-09-21, sixth pass: restoring is already the main point of this
+      // whole panel, so the button itself doesn't need bold styling to earn
+      // attention). Only the label flips: "Restore" for a word still
+      // genuinely archived, "Archive" for one just restored and sitting
+      // here for reconsideration. Either click just toggles st.archived[k]
+      // back and forth -- the same underlying action as the chart's own
+      // Archive/Restore toggle, just entered from this side.
       var b=document.createElement("button");
-      b.className="archbtn";b.type="button";b.textContent="Restore";
+      b.className="archbtn";b.type="button";
+      b.textContent=archivedNow?"Restore":"Archive";
       b.setAttribute("aria-pressed","true");
       b.addEventListener("click",function(){
-        delete st.archived[k];save();build();
+        if(st.archived[k]){
+          archPendingRestore[k]=st.archived[k];
+          delete st.archived[k];
+        } else {
+          st.archived[k]=archPendingRestore[k];
+          delete archPendingRestore[k];
+        }
+        save();build();
       });
       btnTd.appendChild(b);
       tr.appendChild(btnTd);
@@ -2286,6 +2323,12 @@
       wordTd.style.fontSize="calc(19px * var(--ts))";
       wordTd.appendChild(cellNode(form,archHideWord,!!archWordShown[k],
         function(){archWordShown[k]=!archWordShown[k];},true));
+      if(!archivedNow){
+        var restoredHint=document.createElement("span");
+        restoredHint.className="hint";restoredHint.style.marginLeft="6px";
+        restoredHint.textContent="(restored)";
+        wordTd.appendChild(restoredHint);
+      }
       tr.appendChild(wordTd);
       var meaningTd=document.createElement("td");
       meaningTd.style.fontFamily="var(--eng)";meaningTd.style.fontSize="calc(15px * var(--ts))";
@@ -2745,6 +2788,17 @@
     st.queue=st.queue.filter(function(x){return !(isVocab(x)&&wordKey(x)===k);});
     if(st.pos>=st.queue.length) st.pos=Math.max(0,st.queue.length-1);
     st.flipped=false;st.result=null;st.peeked=false;st.sel={};st.reviewIdx=0;newGrid();st.snap=true;render();
+  });
+
+  // Closing the Archived words panel is the natural "done reconsidering"
+  // signal -- any word still sitting there mid-reconsideration (see
+  // archPendingRestore above) finally drops out of the list, so reopening
+  // the panel later shows a clean, purely-archived list again rather than
+  // an ever-growing pile of old "Archive" rows.
+  el("archivedPanel").addEventListener("toggle",function(){
+    if(!el("archivedPanel").open && Object.keys(archPendingRestore).length){
+      archPendingRestore={};renderArchived();
+    }
   });
 
   var armed=false;
