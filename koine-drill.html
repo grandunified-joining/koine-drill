@@ -380,6 +380,14 @@
   #tipsPanel>p{margin-left:9px;padding-left:13px}
   details.refblock>summary .label,details.archgroup>summary .label{color:var(--ink-2)}
   details.refblock .refnote{margin-top:10px}
+  /* press-and-hold targets (Word / Meaning cells of the vocab charts and the
+     Focus words list, 2026-09-26) -- suppress the phone's own long-press
+     text-selection / callout menu so the hold reaches our handler */
+  td.lp{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+  td.lp.lp-hold{background:color-mix(in srgb, var(--accent) 22%, transparent)}
+  .focustag{font-family:var(--eng);font-weight:700;font-size:calc(10.5px * var(--ts));
+    letter-spacing:.05em;text-transform:uppercase;color:var(--accent);
+    border:1px solid var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 
   /* gutter transport — anchored to the card, not to the viewport, so the pair
      tracks the card's position and height instead of sitting at the middle of
@@ -768,7 +776,7 @@
                            // alone -- see rollVerbs() (2026-09-10, ninth pass).
     filters:{},           // filters[deckId][dimKey] = [values]
     queue:[],pos:0,flipped:false,snap:false,peeked:false,got:0,missed:0,result:null,
-    sel:{},reviewIdx:0,grid:[],built:[],rot:{},progress:{},archived:{},
+    sel:{},reviewIdx:0,grid:[],built:[],rot:{},progress:{},archived:{},focus:{},
     started:0,answered:0,done:false,pendingDone:false,missedList:[],
     testMode:false};      // NOT persisted or synced -- always starts off on a fresh load
 
@@ -801,6 +809,7 @@
         if(typeof s.verbSet[k]==="number"||s.verbSet[k]==="random") st.verbSet[k]=s.verbSet[k];
       });
       if(s.archived) st.archived=s.archived;
+      if(s.focus&&typeof s.focus==="object") st.focus=s.focus;
       if(s.progress) st.progress=s.progress;
       if(s.filters) DECKS.forEach(function(d){
         var saved=s.filters[d.id]; if(!saved) return;
@@ -817,7 +826,7 @@
       session:st.session,font:st.font,size:st.size,limit:st.limit,missRequeue:st.missRequeue,
       hl:st.hl,ambigMode:st.ambigMode,depth:st.depth,
       nounSet:st.nounSet,verbSet:st.verbSet,
-      archived:st.archived,filters:st.filters,progress:st.progress,
+      archived:st.archived,focus:st.focus,filters:st.filters,progress:st.progress,
       updatedAt:Date.now()}));}catch(e){}
   }
   load();
@@ -1906,6 +1915,110 @@
   function refLabel(d){
     return d.kind==="vocab" ? "VOCAB CHAPTER "+d.name.replace("Chapters ","").replace("–","-") : d.name;
   }
+  // ---------- Focus words (2026-09-26) ----------
+  // Press and hold a word's Greek or its meaning in any vocab-chapter table
+  // and it is DUPLICATED (not moved) into a separate "Focus words" list that
+  // sits after the last chapter table -- for laying similar-looking words,
+  // or several words for one meaning, side by side. st.focus maps the same
+  // per-word key st.archived uses (deckId+"|w|"+form) to the time it was
+  // added, so the list keeps the order John built it in. Persisted and
+  // synced with everything else. Holding a word that is already in Focus
+  // takes it back out; the Focus list's own Remove button (or a hold there)
+  // does the same.
+  var focHideWord=false, focHideGloss=false, focWordShown={}, focGlossShown={};
+  function toggleFocus(key){
+    if(st.focus[key]) delete st.focus[key];
+    else st.focus[key]=Date.now();
+    save();
+    if(navigator.vibrate){try{navigator.vibrate(15);}catch(e){}}
+    renderRef();
+  }
+  function focusEntries(){
+    return Object.keys(st.focus).map(function(k){
+      var cut=k.indexOf("|w|"); if(cut<0) return null;
+      var d=DECK_BY_ID[k.slice(0,cut)], form=k.slice(cut+3);
+      if(!d||d.kind!=="vocab") return null;
+      var row=d.rows.filter(function(x){return x.form===form;})[0];
+      return row?{key:k,deck:d,row:row,t:st.focus[k]}:null;
+    }).filter(Boolean).sort(function(a,b){return a.t-b.t;});
+  }
+  // delegated press-and-hold on every td.lp inside host; onHold gets the
+  // cell's data-i. A hold swallows the click that follows it, so holding a
+  // hidden-column "Show" chip adds the word without also peeking it.
+  function attachLongPress(host,onHold){
+    var timer=null,sx=0,sy=0,cell=null,fired=false;
+    function cancel(){ if(timer){clearTimeout(timer);timer=null;} if(cell){cell.classList.remove("lp-hold");cell=null;} }
+    host.addEventListener("pointerdown",function(e){
+      if(e.button&&e.button!==0) return;
+      var td=e.target.closest("td.lp"); if(!td||!host.contains(td)) return;
+      cancel();fired=false;cell=td;sx=e.clientX;sy=e.clientY;
+      td.classList.add("lp-hold");
+      timer=setTimeout(function(){
+        timer=null;fired=true;
+        var i=+td.getAttribute("data-i");
+        cancel();onHold(i);
+      },500);
+    });
+    host.addEventListener("pointermove",function(e){
+      if(timer&&(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)) cancel();
+    });
+    ["pointerup","pointercancel","pointerleave"].forEach(function(t){host.addEventListener(t,function(){ if(timer) cancel(); });});
+    host.addEventListener("contextmenu",function(e){ if(e.target.closest("td.lp")) e.preventDefault(); });
+    host.addEventListener("click",function(e){
+      if(fired){fired=false;e.preventDefault();e.stopPropagation();}
+    },true);
+  }
+  function renderFocusBlock(){
+    var list=focusEntries();
+    var dhost=foldable("refblock",'<span class="label">FOCUS WORDS ('+list.length+')</span>',
+      !!refOpen.__focus,function(v){refOpen.__focus=v;});
+    var note=document.createElement("p");note.className="refnote";
+    note.innerHTML="<strong>FOCUS WORDS</strong> · press and hold a word or its meaning in any chapter list above to copy it here; hold it again (or Remove) to take it out.";
+    dhost.appendChild(note);
+    if(!list.length) return dhost;
+    dhost.appendChild(hideToggleRow(
+      function(){return focHideWord;},function(v){focHideWord=v;focWordShown={};},
+      function(){return focHideGloss;},function(v){focHideGloss=v;focGlossShown={};},
+      renderRef));
+    var vw=document.createElement("div");vw.className="tw";
+    var vh='<table class="wordtable"><caption>FOCUS WORDS — '+list.length+' words</caption><thead><tr>'+
+      '<th>Focus</th><th>Word</th><th>Meaning</th><th>Lesson</th></tr></thead><tbody>';
+    var wordPeek=[],glossPeek=[];
+    list.forEach(function(e,i){
+      var x=e.row,key=e.key,archived=!!st.archived[key];
+      var wordShown=!focHideWord||!!focWordShown[key];
+      var glossShown=!focHideGloss||!!focGlossShown[key];
+      vh+='<tr'+(archived?' class="archived-row"':'')+'>'+
+        '<td class="archtoggle"><button type="button" class="archbtn focrm">Remove</button></td>';
+      if(!focHideWord){
+        vh+='<td class="lp" data-i="'+i+'" style="font-size:calc(19px * var(--ts))">'+x.form+'</td>';
+      }else{
+        vh+='<td class="lp" data-i="'+i+'"><button type="button" class="chip peekbtn-word" style="font-family:var(--grk);'+
+          'font-size:calc(16px * var(--ts))">'+(wordShown?x.form:"Show")+'</button></td>';
+        wordPeek.push(key);
+      }
+      if(!focHideGloss){
+        vh+='<td class="lp" data-i="'+i+'" style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+'</td>';
+      }else{
+        vh+='<td class="lp" data-i="'+i+'"><button type="button" class="chip peekbtn-gloss" style="font-family:var(--eng);'+
+          'font-size:calc(13px * var(--ts))">'+(glossShown?x.gloss:"Show")+'</button></td>';
+        glossPeek.push(key);
+      }
+      vh+='<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
+        x.cat+' · '+x.lesson+(archived?' <span class="hint">(archived)</span>':'')+'</td></tr>';
+    });
+    vh+='</tbody></table>';
+    vw.innerHTML=vh;
+    var rb=vw.querySelectorAll(".focrm");
+    list.forEach(function(e,i){rb[i].addEventListener("click",function(){toggleFocus(e.key);});});
+    var wb=vw.querySelectorAll(".peekbtn-word");
+    wordPeek.forEach(function(k,i){wb[i].addEventListener("click",function(){focWordShown[k]=!focWordShown[k];renderRef();});});
+    var gb=vw.querySelectorAll(".peekbtn-gloss");
+    glossPeek.forEach(function(k,i){gb[i].addEventListener("click",function(){focGlossShown[k]=!focGlossShown[k];renderRef();});});
+    attachLongPress(vw,function(i){toggleFocus(list[i].key);});
+    dhost.appendChild(vw);
+    return dhost;
+  }
   function renderRef(){
     var host=el("refHost");host.innerHTML="";
     var legend=document.createElement("p");
@@ -1967,9 +2080,10 @@
           // HTML string, so they can be zipped against the matching buttons
           // once the markup exists in the DOM (same pattern as .archbtn below).
           var wordPeekRows=[], glossPeekRows=[];
-          d.rows.forEach(function(x){
+          d.rows.forEach(function(x,ri){
             var key=d.id+"|w|"+x.form;
             var archived=!!st.archived[key];
+            var lpAttr=' class="lp" data-i="'+ri+'"';
             var wordShown=!refHideWord||!!refWordShown[key];
             var glossShown=!refHideGloss||!!refGlossShown[key];
             // the "(archived)" note rides on the first visible cell among Word /
@@ -1982,25 +2096,26 @@
               '<td class="archtoggle"><button type="button" class="archbtn" aria-pressed="'+
                 (archived?"true":"false")+'">'+(archived?"Restore":"Archive")+'</button></td>';
             if(!refHideWord){
-              vh+='<td style="font-size:calc(19px * var(--ts))">'+x.form+
+              vh+='<td'+lpAttr+' style="font-size:calc(19px * var(--ts))">'+x.form+
                 (noteOnWord?' <span class="hint">(archived)</span>':'')+'</td>';
             }else{
-              vh+='<td><button type="button" class="chip peekbtn-word" style="font-family:var(--grk);'+
+              vh+='<td'+lpAttr+'><button type="button" class="chip peekbtn-word" style="font-family:var(--grk);'+
                 'font-size:calc(16px * var(--ts))">'+(wordShown?x.form:"Show")+'</button>'+
                 (noteOnWord?' <span class="hint">(archived)</span>':'')+'</td>';
               wordPeekRows.push(x);
             }
             if(!refHideGloss){
-              vh+='<td style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
+              vh+='<td'+lpAttr+' style="font-family:var(--eng);font-size:calc(15px * var(--ts))">'+x.gloss+
                 (noteOnGloss?' <span class="hint">(archived)</span>':'')+'</td>';
             }else{
-              vh+='<td><button type="button" class="chip peekbtn-gloss" style="font-family:var(--eng);'+
+              vh+='<td'+lpAttr+'><button type="button" class="chip peekbtn-gloss" style="font-family:var(--eng);'+
                 'font-size:calc(13px * var(--ts))">'+(glossShown?x.gloss:"Show")+'</button>'+
                 (noteOnGloss?' <span class="hint">(archived)</span>':'')+'</td>';
               glossPeekRows.push(x);
             }
             vh+='<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
-                x.cat+' · '+x.lesson+(noteOnLesson?' <span class="hint">(archived)</span>':'')+'</td></tr>';
+                x.cat+' · '+x.lesson+(st.focus[key]?'<span class="focustag">focus</span>':'')+
+                (noteOnLesson?' <span class="hint">(archived)</span>':'')+'</td></tr>';
           });
           vh+='</tbody></table>';
           vw.innerHTML=vh;
@@ -2040,6 +2155,7 @@
               renderRef();
             });
           });
+          attachLongPress(vw,function(i){toggleFocus(d.id+"|w|"+d.rows[i].form);});
           dhost.appendChild(vw);
           return;
         }
@@ -2163,6 +2279,7 @@
         });
         dhost.appendChild(deckResetRow(d));
       });
+      if(g.id==="vocab") gwrap.appendChild(renderFocusBlock());
     });
   }
 
@@ -2876,7 +2993,7 @@
         size:st.size,limit:st.limit,missRequeue:st.missRequeue,
         hl:st.hl,ambigMode:st.ambigMode,depth:st.depth,
         nounSet:st.nounSet,verbSet:st.verbSet,
-        archived:st.archived,filters:st.filters,progress:st.progress,
+        archived:st.archived,focus:st.focus,filters:st.filters,progress:st.progress,
         updatedAt:Date.now()};
     }
     // mirrors load()'s own field-by-field acceptance, so a document from an
@@ -2912,6 +3029,8 @@
       // into fresh, plain, extensible objects instead of adopting the
       // frozen ones directly.
       if(s.archived) st.archived=Object.assign({},s.archived);
+      // same frozen-snapshot hazard as archived -- copy, never adopt
+      if(s.focus&&typeof s.focus==="object") st.focus=Object.assign({},s.focus);
       if(s.progress){
         var freshProgress={};
         Object.keys(s.progress).forEach(function(k){ freshProgress[k]=Object.assign({},s.progress[k]); });
