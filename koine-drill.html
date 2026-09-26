@@ -385,6 +385,19 @@
      text-selection / callout menu so the hold reaches our handler */
   td.lp{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
   td.lp.lp-hold{background:color-mix(in srgb, var(--accent) 22%, transparent)}
+  /* vocab search boxes (2026-09-26): one per vocab section + one global */
+  .vsearch{font-family:var(--eng);font-size:calc(14.5px * var(--ts));color:var(--ink);
+    background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;
+    padding:6px 10px;width:min(100%,300px);margin-bottom:8px;display:block}
+  .vsearch:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .vsearch-wrap{margin:10px 0 4px 9px;padding-left:13px}
+  .vsearch-wrap .hint{text-align:left;margin:-4px 0 0}
+  .ordcell{white-space:nowrap;width:1%}
+  .ordbtn{font-family:var(--eng);font-weight:700;font-size:calc(12px * var(--ts));
+    border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-2);
+    padding:3px 8px;border-radius:6px;cursor:pointer;margin-right:4px;line-height:1.2}
+  .ordbtn:hover:not(:disabled){border-color:var(--ink-3);color:var(--ink)}
+  .ordbtn:disabled{opacity:.3;cursor:default}
   .focustag{font-family:var(--eng);font-weight:700;font-size:calc(10.5px * var(--ts));
     letter-spacing:.05em;text-transform:uppercase;color:var(--accent);
     border:1px solid var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:middle}
@@ -1925,6 +1938,57 @@
   // synced with everything else. Holding a word that is already in Focus
   // takes it back out; the Focus list's own Remove button (or a hold there)
   // does the same.
+  // ---------- Vocab search (2026-09-26) ----------
+  // One box per vocab section (refSearch[deckId], "__focus" for Focus words)
+  // and one global box at the top of the Vocabulary group (refGlobalQ). A row
+  // shows only if it matches BOTH its section's box and the global box.
+  // Matching is on Greek form + English meaning, folded -- accents,
+  // breathings and case ignored, final ς treated as σ -- so "λογος" finds
+  // λόγος. Typing never rebuilds the panel (that would steal focus from the
+  // box); applyVocabFilters() just hides/shows the rows already there.
+  // In-memory only, like the hide toggles.
+  var refSearch={}, refGlobalQ="", vsTables=[];
+  function foldQ(t){return foldGrk(t).replace(/ς/g,"σ").trim();}
+  function applyVocabFilters(fromGlobal){
+    var gq=foldQ(refGlobalQ), hits=0, secs=0;
+    vsTables.forEach(function(t){
+      var lq=foldQ(refSearch[t.id]||""), n=0;
+      var rows=t.table.tBodies[0].rows;
+      t.texts.forEach(function(tx,i){
+        var show=(!gq||tx.indexOf(gq)>-1)&&(!lq||tx.indexOf(lq)>-1);
+        if(rows[i]) rows[i].hidden=!show;
+        if(show) n++;
+      });
+      var cap=t.table.caption;
+      if(cap) cap.textContent=t.label+" — "+((gq||lq)?n+" of "+t.texts.length:t.texts.length)+" words";
+      if(gq){
+        t.dhost.hidden=(n===0);
+        if(fromGlobal&&n>0) t.dhost.open=true;
+      } else {
+        t.dhost.hidden=false;
+        if(fromGlobal) t.dhost.open=!!refOpen[t.id];
+      }
+      if(n>0){hits+=n;secs++;}
+    });
+    var gs=el("vsGlobalStatus");
+    if(gs) gs.textContent=gq?(hits?hits+" match"+(hits===1?"":"es")+" in "+secs+" section"+(secs===1?"":"s"):"No matches"):"";
+  }
+  function searchBox(id,placeholder,getQ,setQ,onInput){
+    var inp=document.createElement("input");
+    inp.type="search";inp.className="vsearch";inp.placeholder=placeholder;
+    inp.setAttribute("data-vs",id);inp.setAttribute("aria-label",placeholder);
+    inp.autocomplete="off";inp.spellcheck=false;
+    inp.value=getQ();
+    inp.addEventListener("input",function(){setQ(inp.value);onInput();});
+    return inp;
+  }
+  function sectionSearch(id,label){
+    var w=document.createElement("div");w.className="vsearch-wrap";w.style.marginTop="0";
+    w.appendChild(searchBox(id,"Search "+label,
+      function(){return refSearch[id]||"";},function(v){refSearch[id]=v;},
+      function(){applyVocabFilters(false);}));
+    return w;
+  }
   var focHideWord=false, focHideGloss=false, focWordShown={}, focGlossShown={};
   function toggleFocus(key){
     if(st.focus[key]) delete st.focus[key];
@@ -1932,6 +1996,17 @@
     save();
     if(navigator.vibrate){try{navigator.vibrate(15);}catch(e){}}
     renderRef();
+  }
+  // move a Focus word one place up (-1) or down (+1); renumbers the whole
+  // list 1..n so the order stays stable no matter how the stamps started
+  // out (new words still append at the end -- Date.now() is always larger)
+  function moveFocus(key,dir){
+    var keys=focusEntries().map(function(e){return e.key;});
+    var i=keys.indexOf(key),j=i+dir;
+    if(i<0||j<0||j>=keys.length) return;
+    keys[i]=keys[j];keys[j]=key;
+    keys.forEach(function(k,n){st.focus[k]=n+1;});
+    save();renderRef();
   }
   function focusEntries(){
     return Object.keys(st.focus).map(function(k){
@@ -1982,7 +2057,7 @@
       renderRef));
     var vw=document.createElement("div");vw.className="tw";
     var vh='<table class="wordtable"><caption>FOCUS WORDS — '+list.length+' words</caption><thead><tr>'+
-      '<th>Focus</th><th>Word</th><th>Meaning</th><th>Lesson</th></tr></thead><tbody>';
+      '<th>Focus</th><th>Word</th><th>Meaning</th><th>Lesson</th><th>Order</th></tr></thead><tbody>';
     var wordPeek=[],glossPeek=[];
     list.forEach(function(e,i){
       var x=e.row,key=e.key,archived=!!st.archived[key];
@@ -2005,7 +2080,9 @@
         glossPeek.push(key);
       }
       vh+='<td style="font-family:var(--eng);font-size:calc(14px * var(--ts));color:var(--ink-3)">'+
-        x.cat+' · '+x.lesson+(archived?' <span class="hint">(archived)</span>':'')+'</td></tr>';
+        x.cat+' · '+x.lesson+(archived?' <span class="hint">(archived)</span>':'')+'</td>'+
+        '<td class="ordcell"><button type="button" class="ordbtn ordup" aria-label="Move up"'+(i===0?' disabled':'')+'>▲</button>'+
+        '<button type="button" class="ordbtn orddn" aria-label="Move down"'+(i===list.length-1?' disabled':'')+'>▼</button></td></tr>';
     });
     vh+='</tbody></table>';
     vw.innerHTML=vh;
@@ -2015,12 +2092,25 @@
     wordPeek.forEach(function(k,i){wb[i].addEventListener("click",function(){focWordShown[k]=!focWordShown[k];renderRef();});});
     var gb=vw.querySelectorAll(".peekbtn-gloss");
     glossPeek.forEach(function(k,i){gb[i].addEventListener("click",function(){focGlossShown[k]=!focGlossShown[k];renderRef();});});
+    var ub=vw.querySelectorAll(".ordup"),db=vw.querySelectorAll(".orddn");
+    list.forEach(function(e,i){
+      ub[i].addEventListener("click",function(){moveFocus(e.key,-1);});
+      db[i].addEventListener("click",function(){moveFocus(e.key,1);});
+    });
     attachLongPress(vw,function(i){toggleFocus(list[i].key);});
+    dhost.appendChild(sectionSearch("__focus","Focus words"));
     dhost.appendChild(vw);
+    vsTables.push({id:"__focus",dhost:dhost,table:vw.querySelector("table"),label:"FOCUS WORDS",
+      texts:list.map(function(e){return foldQ(e.row.form+" "+e.row.gloss);})});
     return dhost;
   }
   function renderRef(){
-    var host=el("refHost");host.innerHTML="";
+    var host=el("refHost");
+    // a background sync can repaint this panel mid-typing -- remember which
+    // search box had focus (and the caret) so it survives the rebuild
+    var ae=document.activeElement, keepVs=(ae&&ae.getAttribute&&ae.getAttribute("data-vs"))||null,
+        keepSel=keepVs?[ae.selectionStart,ae.selectionEnd]:null;
+    host.innerHTML="";vsTables=[];
     var legend=document.createElement("p");
     legend.className="hint";legend.style.textAlign="left";
     legend.innerHTML='Cells are tinted by how you have answered them: '+
@@ -2049,6 +2139,15 @@
         !!refGroupOpen[g.id],
         function(v){refGroupOpen[g.id]=v;});
       host.appendChild(gwrap);
+      if(g.id==="vocab"){
+        var gsw=document.createElement("div");gsw.className="vsearch-wrap";
+        gsw.appendChild(searchBox("__global","Search all vocabulary (Greek or English)",
+          function(){return refGlobalQ;},function(v){refGlobalQ=v;},
+          function(){applyVocabFilters(true);}));
+        var gst=document.createElement("p");gst.className="hint";gst.id="vsGlobalStatus";
+        gsw.appendChild(gst);
+        gwrap.appendChild(gsw);
+      }
       groupDecks.forEach(function(d){
         var dhost=foldable("refblock",'<span class="label">'+refLabel(d)+'</span>',
           !!refOpen[d.id],
@@ -2156,7 +2255,10 @@
             });
           });
           attachLongPress(vw,function(i){toggleFocus(d.id+"|w|"+d.rows[i].form);});
+          dhost.appendChild(sectionSearch(d.id,refLabel(d).toLowerCase().replace("vocab chapter","chapters")));
           dhost.appendChild(vw);
+          vsTables.push({id:d.id,dhost:dhost,table:vw.querySelector("table"),label:refLabel(d),
+            texts:d.rows.map(function(x){return foldQ(x.form+" "+x.gloss);})});
           return;
         }
         if(!d.table){                                // no grid — a plain two-column list
@@ -2281,6 +2383,11 @@
       });
       if(g.id==="vocab") gwrap.appendChild(renderFocusBlock());
     });
+    applyVocabFilters(false);
+    if(keepVs){
+      var back=host.querySelector('input[data-vs="'+keepVs+'"]');
+      if(back){back.focus();try{back.setSelectionRange(keepSel[0],keepSel[1]);}catch(e){}}
+    }
   }
 
   function renderStatus(){
