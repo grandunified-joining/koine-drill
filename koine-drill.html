@@ -647,6 +647,8 @@
     <details id="tipsPanel">
       <summary><span class="label">Tips</span></summary>
       <p><kbd>Enter</kbd> check / next · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>Space</kbd> flip (Reveal mode).
+        On the card itself: tap the left third for the previous card, the right third for the next,
+        and the middle to flip it once it has been answered.
         Progress follows your account across devices, per deck and per direction, with a copy kept in this browser too.</p>
       <p>Reveal is assistance: switch to it mid-card and back without losing your place. Looking first
         costs nothing on a paradigm deck — the pattern is still what you are being asked for — but on
@@ -3005,7 +3007,21 @@
     render();
   }
   el("flip").addEventListener("click",toggleFlip);
-  card.addEventListener("click",toggleFlip);
+  // Tap zones on the card (2026-09-26): left third = previous card, right
+  // third = next card, middle third = flip (only once flipping is allowed --
+  // after an answer in Recall, any time in Reveal). Left/right go through the
+  // real Prev/Next buttons so their disabled state and the Finish step on the
+  // last card behave exactly as the transport does. Measured against the
+  // card's on-screen box, which is the same whether or not it is flipped.
+  card.addEventListener("click",function(e){
+    if(e.target.closest&&e.target.closest("button,a,input,select,textarea")) return;
+    var r=card.getBoundingClientRect();
+    if(!r.width) return;
+    var x=(e.clientX-r.left)/r.width;
+    if(x<1/3){ if(!el("prev").disabled) el("prev").click(); }
+    else if(x>2/3){ if(!el("next").disabled) el("next").click(); }
+    else toggleFlip();
+  });
   card.style.cursor="pointer";
   el("again").addEventListener("click",function(){gradeReveal(false);});
   el("got").addEventListener("click",function(){gradeReveal(true);});
